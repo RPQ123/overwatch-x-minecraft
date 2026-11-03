@@ -1,0 +1,152 @@
+"""Bounded startup telemetry. Never starts, stops or attaches a game."""
+from __future__ import annotations
+
+from contextlib import contextmanager
+import json
+import os
+from pathlib import Path
+import re
+import threading
+import time
+import uuid
+
+REQUEST_ENV = 'OWMC_STARTUP_REQUEST'
+
+
+@contextmanager
+def startup_request(root):
+    """Pass the launcher's monotonic origin to its one supervised child."""
+    previous = os.environ.get(REQUEST_ENV)
+    request = dict(root=str(Path(root).resolve()), requestedNs=time.perf_counter_ns(),
+                   requestId=uuid.uuid4().hex, launcherPid=os.getpid())
+    os.environ[REQUEST_ENV] = json.dumps(request)
+    try:
+        yield request
+    finally:
+        if previous is None:
+            os.environ.pop(REQUEST_ENV, None)
+        else:
+            os.environ[REQUEST_ENV] = previous
+
+
+class StartupTimeline:
+    STAGES = {
+        'python_spawn': ('startup_requested', 'python_entered'),
+        'python_imports': ('python_entered', 'python_imports_ready'),
+        'guest_prepare': ('guest_prepare_started', 'guest_prepare_finished'),
+        'mc_jvm_boot': ('mc_jvm_spawn_requested', 'fabric_loading'),
+        'fabric_mod_loading': ('fabric_loading', 'mc_client_initialized'),
+        'mc_resources': ('mc_client_initialized', 'mc_world_load_requested'),
+        'mc_world_loading': ('mc_world_load_requested', 'mc_world_ready'),
+        'native_process_plugin': ('native_spawn_requested', 'native_client_ready'),
+        'native_bootstrap': ('native_bootstrap_started', 'native_bootstrap_finished'),
+        'native_hero_spawn': ('native_hero_spawn_started', 'native_hero_spawn_complete'),
+        'native_weapon_graph_wait': ('native_weapon_graph_wait_started', 'native_weapon_graph_ready'),
+        'compositor_attach': ('compositor_attach_started', 'compositor_ready'),
+        'native_observers': ('compositor_ready', 'native_observers_ready'),
+    }
+
+    def __init__(self, root, settings, python_entered_ns, imports_ready_ns):
+        self.lock = threading.RLock()
+        root = Path(root).resolve()
+        now = time.perf_counter_ns()
+        try:
+            request = json.loads(os.environ.get(REQUEST_ENV, '{}'))
+            origin = int(request['requestedNs'])
+            if (Path(request['root']).resolve() != root
+                    or not 0 <= now - origin < 600_000_000_000
+                    or origin > python_entered_ns):
+                raise ValueError('Unrelated/stale startup request')
+        except (ValueError, KeyError, TypeError):
+            request = {}
+            origin = python_entered_ns
+        self.origin = origin
+        self.path = root / 'research/launcher' / (
+            'startup-timeline-' + time.strftime('%Y%m%d-%H%M%S') + f'-{time.time_ns() % 1_000_000_000:09d}.json')
+        self.document = dict(schemaVersion=1, clock='Python perf_counter_ns',
+                             originNs=origin, request=request, supervisorPid=os.getpid(),
+                             status='starting', events=[],
+                             settings={k: settings.get(k) for k in (
+                                 'worldName', 'width', 'height', 'shaders', 'renderDistance',
+                                 'showMinecraft', 'captureFps', 'hostFps')},
+                             logTiming='First observation on monotonic clock; bounded by startup polling and log flushing.')
+        self.mark('startup_requested', at_ns=origin)
+        self.mark('python_entered', at_ns=python_entered_ns)
+        self.mark('python_imports_ready', at_ns=imports_ready_ns)
+
+    def mark(self, name, *, at_ns=None, **evidence):
+        with self.lock:
+            if any(row['name'] == name for row in self.document['events']):
+                return
+            stamp = time.perf_counter_ns() if at_ns is None else at_ns
+            self.document['events'].append(dict(name=name, elapsedMs=round((stamp-self.origin)/1e6, 3),
+                                                monotonicNs=stamp, **evidence))
+            self.save()
+
+    def stages(self):
+        events = {row['name']: row['elapsedMs'] for row in self.document['events']}
+        return {name: round(events[end]-events[start], 3)
+                for name, (start, end) in self.STAGES.items() if start in events and end in events}
+
+    def save(self):
+        with self.lock:
+            self.document['stagesMs'] = self.stages()
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            temporary = self.path.with_suffix('.tmp')
+            temporary.write_text(json.dumps(self.document, indent=2, ensure_ascii=False)+'\n', encoding='utf-8')
+            for attempt in range(12):
+                try:
+                    temporary.replace(self.path)
+                    break
+                except PermissionError:
+                    if attempt == 11:
+                        raise
+                    time.sleep(.005)
+
+    def finish(self, status, **evidence):
+        with self.lock:
+            if self.document['status'] != 'starting':
+                return
+            self.mark('hero_selection' if status == 'hero-selection' else 'startup_failed', **evidence)
+            self.document.update(status=status, totalMs=self.document['events'][-1]['elapsedMs'])
+            self.save()
+
+    def summary(self):
+        with self.lock:
+            return dict(path=str(self.path), status=self.document['status'],
+                        elapsedMs=self.document['events'][-1]['elapsedMs'],
+                        totalMs=self.document.get('totalMs'), stagesMs=self.stages(),
+                        milestonesMs={row['name']:row['elapsedMs'] for row in self.document['events']})
+
+
+class GuestStartupLog:
+    """Read only new launch-log bytes while the existing ready check waits."""
+    MARKERS = (
+        ('fabric_loading', re.compile(r'Loading Minecraft .*Fabric Loader')),
+        ('fabric_mod_inventory', re.compile(r'Loading \d+ mods:')),
+        ('mc_client_initialized', re.compile(r'\[OWMCStartup\] client_initialized')),
+        ('mc_world_load_requested', re.compile(r'\[OWMCStartup\] world_load_requested')),
+        ('mc_spawn_region_preparing', re.compile(r'Preparing start region for dimension')),
+        ('mc_first_world_render', re.compile(r'\[OWMCFrames\] Actual world/depth exporter connected')),
+    )
+
+    def __init__(self, path, timeline):
+        self.path, self.timeline, self.offset, self.pending = Path(path), timeline, 0, b''
+
+    def poll(self):
+        if self.timeline is None:
+            return
+        try:
+            with self.path.open('rb') as stream:
+                stream.seek(self.offset)
+                data = stream.read()
+                self.offset = stream.tell()
+        except FileNotFoundError:
+            return
+        lines = (self.pending + data).split(b'\n')
+        self.pending = lines.pop()
+        for line in lines:
+            line = line.decode('utf-8', errors='replace')
+            for name, pattern in self.MARKERS:
+                if pattern.search(line):
+                    self.timeline.mark(name, source='guest launch.log', observed=True)

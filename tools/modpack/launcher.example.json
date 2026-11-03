@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "account": {"mode": "development-offline"},
+  "rendererPolicy": "optional-sodium",
+  "paths": {
+    "python": "runtime/python/python.exe",
+    "java": "runtime/java/bin/java.exe",
+    "owExecutable": "overwatch-2015/Overwatch Beta 0.8.0.24919/GameClientApp.patched.exe",
+    "minecraft": "minecraft-1.21.1",
+    "profile": "guest-passthrough-client",
+    "privateAssets": "private-assets",
+    "meshAssets": "private-assets/owmc-mesh",
+    "heroVoiceAssets": "private-assets/ow1-zhcn-2016/thnu-full"
+  }
+}

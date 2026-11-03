@@ -1,0 +1,435 @@
+plugins { id 'fabric-loom' version '1.8.13' }
+
+tasks.register('verifySurvivalHealth', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.SurvivalHealthCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifySurvivalHealth') }
+
+tasks.register('verifyBackgroundWindowVisibility', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.BackgroundWindowVisibilityCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyBackgroundWindowVisibility') }
+tasks.register('verifyHeroVoiceReload', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.HeroVoiceReloadCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyHeroVoiceReload') }
+tasks.register('verifyPortalMenuKeys', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.PortalMenuKeysCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyPortalMenuKeys') }
+tasks.register('verifyBossHudTravelScope', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.BossHudTravelScopeCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyBossHudTravelScope') }
+
+tasks.register('verifyBossTravelMenuKeys', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.BossTravelMenuKeysCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyBossTravelMenuKeys') }
+tasks.register('verifyTwilightBossTravel', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.TwilightBossTravelCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyTwilightBossTravel') }
+
+tasks.register('verifyUltimateCalloutGate', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.UltimateCalloutGateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyUltimateCalloutGate') }
+version = '0.1.0'
+tasks.register('verifyMeiFreezeProgress', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.MeiFreezeProgressCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyMeiFreezeProgress') }
+tasks.register('verifyNativeInfraSight', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeInfraSightStateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeInfraSight') }
+group = 'lab.owmcguest'
+
+tasks.register('verifyBodyMotionSample', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.BodyMotionSampleCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyBodyMotionSample') }
+tasks.register('verifyHeroSelectCalloutGate', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.HeroSelectCalloutGateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyHeroSelectCalloutGate') }
+base { archivesName = 'owmc-guest' }
+loom {
+    splitEnvironmentSourceSets()
+    mods { owmcguest { sourceSet sourceSets.main; sourceSet sourceSets.client } }
+}
+dependencies {
+    minecraft 'com.mojang:minecraft:1.21.1'
+    mappings 'net.fabricmc:yarn:1.21.1+build.3:v2'
+    modImplementation 'net.fabricmc:fabric-loader:0.19.5'
+    modImplementation 'net.fabricmc.fabric-api:fabric-api:0.116.17+1.21.1'
+}
+tasks.withType(JavaCompile).configureEach { options.release = 21; options.encoding = 'UTF-8' }
+sourceSets.test.compileClasspath += sourceSets.client.output + sourceSets.client.compileClasspath
+sourceSets.test.runtimeClasspath += sourceSets.client.output + sourceSets.client.runtimeClasspath
+tasks.register('verifyWorldFrameMapping', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WorldFrameMappingCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyWorldFrameMapping') }
+tasks.register('verifyHostPose', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.HostPoseCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyHostPose') }
+tasks.register('verifyNativeCombat', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeCombatCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeCombat') }
+
+tasks.register('verifyNativeHoverLift', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeHoverLiftCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeHoverLift') }
+
+tasks.register('verifyPharahRocketPresentation', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.PharahRocketPresentationCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyPharahRocketPresentation') }
+
+tasks.register('verifyLoadedRayPrefix', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.LoadedRayPrefixCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyLoadedRayPrefix') }
+tasks.register('verifyEliminations', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.EliminationLedgerCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyEliminations') }
+tasks.register('verifyNativeAbilityReader', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeAbilityReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeAbilityReader') }
+
+tasks.register('verifyWallClimb', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WallClimbCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyWallClimb') }
+
+tasks.register('verifyFlightToggle', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.FlightToggleCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyFlightToggle') }
+tasks.register('verifyNativeFlight', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeFlightReaderCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeFlight') }
+
+tasks.register('verifyNativeBlink', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeBlinkCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeBlink') }
+tasks.register('verifyGenjiDoubleJump', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.GenjiDoubleJumpCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyGenjiDoubleJump') }
+
+tasks.register('verifyNativeWalkSpeed', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeWalkSpeedCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeWalkSpeed') }
+
+tasks.register('verifyNativeMotorIntent', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeMotorIntentCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeMotorIntent') }
+
+tasks.register('verifyNativeLocomotionReader', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeLocomotionReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeLocomotionReader') }
+
+tasks.register('verifyNativeRoll', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeRollCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeRoll') }
+
+tasks.register('verifyNativeRollReader', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeRollReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeRollReader') }
+
+tasks.register('verifyNativeSkills', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeSkillReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeSkills') }
+
+tasks.register('verifyNativeMeter', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeMeterReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeMeter') }
+tasks.register('verifyNativeChargeEligibility', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeChargeEligibilityCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeChargeEligibility') }
+
+tasks.register('verifyNativeChargeScope', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeChargeScopeCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyNativeChargeScope') }
+
+tasks.register('verifyNativeChargeBudget', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeChargeBudgetCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyNativeChargeBudget') }
+
+tasks.register('verifyPharahConcussiveBursts', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.PharahConcussiveBurstsCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyPharahConcussiveBursts') }
+
+tasks.register('verifyRocketExplosionTransport', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.RocketExplosionTransportCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyRocketExplosionTransport') }
+
+tasks.register('verifyNativeUltimateEventGate', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeUltimateEventGateCheck'
+}
+
+tasks.named('check') { dependsOn tasks.named('verifyNativeUltimateEventGate') }
+
+tasks.register('verifyNativeVisorAim', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeVisorAimCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeVisorAim') }
+
+tasks.register('verifyNativeDeflect', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeDeflectGeometryCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeDeflect') }
+
+tasks.register('verifyNativeUtilityKeys', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeUtilityKeysCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeUtilityKeys') }
+
+tasks.register('verifyNativeDeadeyeEvents', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeDeadeyeEventsCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeDeadeyeEvents') }
+
+tasks.register('verifyPharahBarragePresentation', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.PharahBarragePresentationCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyPharahBarragePresentation') }
+
+tasks.register('verifyCombatFeedback', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.CombatFeedbackCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyCombatFeedback') }
+
+tasks.register('verifyNativeDeploymentGate', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeDeploymentGateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeDeploymentGate') }
+
+tasks.register('verifyNativeSpawnHealthGate', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeSpawnHealthGateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeSpawnHealthGate') }
+
+tasks.register('verifyNativeRecallHistory', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeRecallHistoryCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeRecallHistory') }
+
+tasks.register('verifyNativeAbilityContinuation', JavaExec) {
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeAbilityContinuationGateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeAbilityContinuation') }
+
+tasks.register('verifyHelixPresentation', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.HelixPresentationCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyHelixPresentation') }
+
+tasks.register('verifyNativeDeadeyeInputLock', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeDeadeyeInputLockCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeDeadeyeInputLock') }
+
+
+tasks.register('verifyPulseBombPresentation', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.PulseBombPresentationCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyPulseBombPresentation') }
+
+tasks.register('verifyHanzoSonicArrow', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.HanzoSonicArrowStateCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyHanzoSonicArrow') }
+
+// integrator/oldgaps: include the independent sustain phase assertions.
+tasks.register('verifyNativeSustainPhase', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeSustainPhaseCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyNativeSustainPhase') }
+
+// integrator 20261026b: menu cooldown fixture; no game process required.
+tasks.register('verifyMenusCooldown', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativeCooldownRefillCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyMenusCooldown') }
+
+// integrator 20261027: random summon and Tracer lifecycle fixtures.
+tasks.register('verifyRandomSummonPolicy', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.RandomSummonPolicyCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyRandomSummonPolicy') }
+
+tasks.register('verifyTracerPulseFirstUse', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.NativePulseGateCheck'
+}
+tasks.register('verifyRecallSoundBegin', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.RecallSoundGateCheck'
+}
+tasks.named('check') {
+    dependsOn tasks.named('verifyTracerPulseFirstUse'), tasks.named('verifyRecallSoundBegin')
+}
+
+['verifyStartupCompilerBudget':false,'verifyStartupCompilerBudgetConflict':true].each { taskName, conflict ->
+    tasks.register(taskName, JavaExec) {
+        dependsOn tasks.named('testClasses')
+        classpath = sourceSets.test.runtimeClasspath
+        mainClass = 'lab.owmcguest.StartupCompilerBudgetCheck'
+        def folder = layout.buildDirectory.dir('compiler-budget-fixture').get().asFile
+        def directive = new File(folder, 'owned.json')
+        doFirst { folder.mkdirs(); directive.setText('[{"match":"*::*","c2":{"Exclude":true}}]\n','UTF-8') }
+        jvmArgs '-XX:+UnlockDiagnosticVMOptions', '-XX:CompilerDirectivesFile='+directive.absolutePath
+        systemProperty 'owmc.startupCompilerBudget','true'
+        systemProperty 'owmc.startupCompilerBudgetFile',directive.absolutePath
+        systemProperty 'owmc.compilerTestDirectory',folder.absolutePath
+        if(conflict) args 'conflict'
+    }
+    tasks.named('check') { dependsOn tasks.named(taskName) }
+}

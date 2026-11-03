@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "owbridge",
+  "version": "0.1.0",
+  "name": "Overwatch Bridge Diagnostics",
+  "description": "Local raw pose telemetry for the Minecraft / Overwatch fusion research lab.",
+  "environment": "client",
+  "entrypoints": {"client": ["lab.owbridge.BridgeClient"]},
+  "depends": {"fabricloader": ">=0.19.5", "minecraft": "1.21.1", "java": ">=21"}
+}

@@ -1,0 +1,25 @@
+#include <winver.h>
+1 ICON "../../assets/launcher/owmc.ico"
+1 VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_APP
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "080404B0"
+    BEGIN
+      VALUE "FileDescription", "ow x mc 启动器"
+      VALUE "ProductName", "守望先锋 × 我的世界（非官方粉丝作品）"
+      VALUE "FileVersion", "1.0.0"
+      VALUE "ProductVersion", "1.0.0"
+      VALUE "OriginalFilename", "ow x mc 启动器.exe"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x0804, 1200
+  END
+END

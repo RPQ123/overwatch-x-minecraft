@@ -1,0 +1,163 @@
+# Original game data, downloaded tools and local research stay private.
+/overwatch-2015/
+/minecraft-1.21.1/
+/tools/python/
+/tools/PrismLauncher/
+/tools/*.zip
+/research/
+/bridge/build/
+/combat/build/
+/combat/.gradle/
+/combat/run/
+/tools/gradle/
+/tools/gradle-cache/
+/combat-client/
+/guest/build/
+/guest/.gradle/
+/guest/run/
+/guest-client/
+/guest-patch-client/
+/guest-creative-client/
+/guest-world-client/
+/guest-passthrough-client/
+/guest-pose-test-client/
+/aoa3-neoforge-client/
+/aoa3-connector-client/
+/minecraft-overwatch-client/
+/native-host/build/
+__pycache__/
+/.venv/
+/tools/mingw64/
+
+# Local per-machine state (2026-11-02)
+/guest/logs/
+/*.log
+/passthrough-settings.json
+/passthrough-settings.json.bak-*
+/secondary-minecraft-settings.json
+/*.lnk
+
+# Generated modpack previews and local first-run receipts.
+/dist/
+/config/
+/data/
+/private-assets/
+/game/
+
+# Archived machine-local settings, logs and client profiles stay private.
+/_archive/*
+!/_archive/INDEX.md
+
+# 由 tools/launcher_exe/build.ps1 生成
+/ow x mc 启动器.exe
+
+# Public-source preparation: keep local profiles, runtimes and caches private.
+# Root anchoring matters: guest/src/main/resources/data/ is project source.
+/*-client/
+/.minecraft/
+/.universal-modder/
+/runtime/
+/toolchains/
+/libraries/
+/versions/
+/assets/indexes/
+/assets/objects/
+/tools/ffmpeg/
+/tools/jdk*/
+/tools/gradle-*/
+/tools/.cache/
+.gradle/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Compiled binaries, installers and downloadable archives.
+*.exe
+*.dll
+*.pdb
+*.class
+*.jar
+*.o
+*.obj
+*.a
+*.lib
+*.msi
+*.msix
+*.cab
+*.zip
+*.7z
+*.rar
+*.tar
+*.gz
+*.bz2
+*.xz
+
+# Full captures, private game/audio assets and memory dumps.
+# Curated docs/media/*.jpg and heroes-12.gif remain eligible for review.
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.flv
+*.wav
+*.mp3
+*.ogg
+*.wem
+*.f32le
+*.pcm
+*.bk2
+*.pak
+*.dds
+*.fbx
+*.blend
+*.dmp
+*.dump
+*.log
+*.log.*
+**/logs/
+**/crash-reports/
+hs_err_pid*
+
+# Minecraft saves, account/session files and personal settings.
+**/saves/
+**/worlds/
+*.mca
+*.mcr
+level.dat
+level.dat_old
+session.lock
+**/launcher_accounts.json
+**/launcher_profiles.json
+**/usercache.json
+**/usernamecache.json
+**/options.txt
+/launcher-settings*.json
+/installed.json
+/.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+/.aws/
+/.ssh/
+/.codex/
+/.agents/
+/.claude/
+/.idea/
+/.vscode/
+Thumbs.db
+.DS_Store
+
+# Local contact sheets and intermediate media are not publication assets.
+/docs/media/_preview/
+/docs/media/_work/
+
+# /research/ stays ignored in full, including local audit reports and captures.
+# Only deliberately reviewed prose should later be copied into docs/.
+# Ignore rules do not untrack files or remove anything from Git history.

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "id": "owmcguest",
+  "version": "0.1.0",
+  "name": "Minecraft background world exporter",
+  "environment": "*",
+  "mixins": ["owmcguest.mixins.json", "owmcguest-f9.mixins.json"],
+  "entrypoints": {"preLaunch": ["lab.owmcguest.StartupCompilerBudget"], "main": ["lab.owmcguest.GuestMod", "lab.owmcguest.SurvivalFeatures"], "client": ["lab.owmcguest.GuestExporter", "lab.owmcguest.PatchExporter", "lab.owmcguest.WorldFrameExporter", "lab.owmcguest.SurvivalClient"]},
+  "depends": {"fabricloader": ">=0.19.5", "fabric-api": "*", "minecraft": "1.21.1", "java": ">=21"}
+}
