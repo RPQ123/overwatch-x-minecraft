@@ -10,11 +10,13 @@ MIT 仅覆盖本项目拥有权利的代码与相应自有说明。下列第三�
 - Overwatch 客户端、英雄模型、动画、语音、音效与贴图属于**暴雪娱乐**及相应权利人，
   不在本仓库内，也不在 MIT 授权范围内。
 - Minecraft 客户端及其游戏资源属于 Mojang / Microsoft 及相应权利人；同样不随仓库提供。
-- `docs/media/` 是压缩的玩法演示截图与短 GIF，保留其中游戏作品与商标的原有权利；
+- `docs/media/` 包含压缩演示素材和官方英雄图标，保留其中游戏作品与商标的原有权利；
   不作为 MIT 游戏素材包授权。素材来源见 [媒体说明](docs/media/README.md)。
 - 项目 logo 由 `tools/assets/draw_launcher_icon.py` 绘制；项目名称、图标或声明均不授予
   暴雪、Mojang、微软或其他第三方的商标权。本项目与上述公司无隶属或认可关系。
 - 本项目为非商业粉丝研究项目。这是项目定位；自有代码的许可条款以 MIT 原文为准。
+
+- 英雄头像与技能图标 © Blizzard Entertainment，来源为 [Overwatch Wiki](https://overwatch.weirdgloop.org/)；仅用于非商业粉丝项目展示，逐文件来源见 [媒体说明](docs/media/README.md#技能状态与图标来源)。
 
 ## 路线、研究和直接保留的第三方材料
 
