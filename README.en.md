@@ -42,6 +42,8 @@ Mirror: pending · SHA256 file: pending.
 
 ## Quick start
 
+<p align="center"><img src="docs/media/launcher.png" width="640" alt="Launcher home page"></p>
+
 Once you have the complete package:
 
 1. Extract the entire ZIP and double-click **`ow x mc 启动器.exe`**.

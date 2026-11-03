@@ -42,6 +42,8 @@
 
 ## 快速开始
 
+<p align="center"><img src="docs/media/launcher.png" width="640" alt="启动器主页"></p>
+
 取得完整整合包后：
 
 1. 完整解压 ZIP，双击 **`ow x mc 启动器.exe`**。
