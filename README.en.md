@@ -93,7 +93,7 @@ This is a non-commercial fan project, unaffiliated with Blizzard Entertainment, 
 
 <!-- DOWNLOAD_LINKS -->
 <div align="center">
-  <h3><a href="https://pan.baidu.com/s/1dt433i2fr2vXsVXvQznhUg?pwd=1234">⬇ Download OWMC v1.0.0 from Baidu Netdisk</a></h3>
+  <h3><a href="https://pan.baidu.com/s/1J33yNy1CspvdWY0oxFD0tw?pwd=1234">⬇ Download OWMC v1.0.0 from Baidu Netdisk</a></h3>
   <p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong></p>
   <p>Extraction code <kbd>1234</kbd> · Updated <strong>2026-11-08</strong></p>
   <p><strong>SHA256</strong> <code>58d08b12f640c368419c91e9177f80ec840ed627aed24322cd9634935de547aa</code></p>
