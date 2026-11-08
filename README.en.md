@@ -1,9 +1,23 @@
 <div align="center">
-  <img src="assets/launcher/owmc.png" width="144" alt="Overwatch × Minecraft logo">
+  <img src="assets/launcher/owmc.png" width="128" alt="Overwatch × Minecraft logo">
   <h1>Overwatch × Minecraft</h1>
   <p><strong>Original Overwatch heroes in a real Minecraft world.</strong></p>
-  <p><a href="README.md">简体中文</a> · English · <a href="#download">Download</a> · <a href="docs/PLAYER-README.md">Player guide (Chinese)</a> · <a href="docs/BUILDING.md">Build guide</a></p>
-  <p><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License for project code"></a></p>
+  <p>
+    <kbd>v1.0.0</kbd>
+    <kbd>Windows x64</kbd>
+    <kbd>MC 1.21.1 Fabric</kbd>
+    <kbd>OW 0.8 Beta</kbd>
+    <a href="LICENSE"><kbd>MIT</kbd></a>
+    <kbd>14 heroes</kbd>
+  </p>
+  <p>
+    <a href="#demo">▶ Demo</a> ·
+    <a href="#download">Download</a> ·
+    <a href="#quick-start">Quick start</a> ·
+    <a href="#controls">Controls</a> ·
+    <a href="#hero-restoration-progress">Hero abilities</a> ·
+    <a href="README.md">简体中文</a>
+  </p>
 </div>
 
 This project connects the **2016 offline Overwatch beta 0.8.0.24919** with **Minecraft 1.21.1**. Overwatch provides the heroes, weapons, animations, HUD, and sound. Minecraft provides the terrain, creatures, movement, collision, and saves. You play in the Overwatch window.
@@ -13,26 +27,66 @@ This is a non-commercial fan project, unaffiliated with Blizzard Entertainment, 
 ## Demo
 
 <p align="center">
-  <img src="docs/media/heroes-12.gif" width="640" alt="Gameplay featuring 12 heroes in Minecraft">
+  <img src="docs/media/heroes-12.gif" width="768" alt="Gameplay featuring 12 heroes in Minecraft">
 </p>
 
-Full trailer: link pending. [Media sources](docs/media/README.md).
+<p align="center"><sub>Full trailer link pending · <a href="docs/media/README.md">Media sources</a></sub></p>
 
-| Original heroes and weapons | Minecraft worlds |
-| --- | --- |
-| ![Genji’s shuriken and HUD](docs/media/genji-shuriken.jpg) | ![Widowmaker and Minecraft creatures](docs/media/widowmaker-sniper.jpg) |
-| ![Mei’s freeze spray](docs/media/mei-freeze.jpg) | ![McCree exploring the Twilight Forest](docs/media/twilight-forest.jpg) |
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/media/genji-shuriken.jpg" width="440" alt="Genji · Shuriken and HUD"><br>
+      <sub>Genji · Shuriken and HUD</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/media/widowmaker-sniper.jpg" width="440" alt="Widowmaker · Minecraft creatures"><br>
+      <sub>Widowmaker · Minecraft creatures</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/media/mei-freeze.jpg" width="440" alt="Mei · Freeze spray"><br>
+      <sub>Mei · Freeze spray</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/media/twilight-forest.jpg" width="440" alt="McCree · Twilight Forest"><br>
+      <sub>McCree · Twilight Forest</sub>
+    </td>
+  </tr>
+</table>
 
 ## Features
 
-- **Fourteen heroes.** Roadhog and Winston join the roster with original first-person models, weapon animations, HUD, and sound.
-- **A real world:** Minecraft handles exploration, movement, block collision, dimension travel, and saves.
-- **In-game menus:** toggle flight, adjust time, build portals, summon mobs, travel to Boss areas, and refill ability resources.
-- **Twilight Forest and shaders:** use installed dimension mods and optional Iris / MakeUp shaders.
-- **One launcher:** load the world and hero picker automatically, then save the world when you stop.
-
-- **F5 and survival.** Summon training NPCs for all 14 heroes and toggle survival or invulnerability. Player heroes and training NPCs are immune to fall damage.
-- **Health sync on hit.** Native health reads and writes run in the background to reduce main-thread waits on hit. In-game performance awaits a retest.
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <strong>🎯 Original heroes</strong><br>
+      Play 14 heroes, including Roadhog and Winston, with original hands, weapon animations, HUD, and sound.
+    </td>
+    <td width="33%" valign="top">
+      <strong>🌍 A real world</strong><br>
+      Explore terrain, creatures, and dimensions. Minecraft handles movement, collisions, and saves.
+    </td>
+    <td width="33%" valign="top">
+      <strong>⚔️ Survival and training</strong><br>
+      Use F5 to summon hero training NPCs and toggle survival or invulnerability. Heroes and training NPCs take no fall damage.
+    </td>
+  </tr>
+  <tr>
+    <td width="33%" valign="top">
+      <strong>🧭 World tools</strong><br>
+      Fly, set the time, build portals, summon mobs, reach boss areas, and refill ability resources.
+    </td>
+    <td width="33%" valign="top">
+      <strong>🌲 Twilight Forest and shaders</strong><br>
+      Explore installed dimension mods and use optional Iris / MakeUp shaders.
+    </td>
+    <td width="33%" valign="top">
+      <strong>🚀 One launcher</strong><br>
+      Double-click to reach the hero picker. Stopping the game saves the world.
+    </td>
+  </tr>
+</table>
 
 ## Download
 
@@ -62,30 +116,24 @@ See the [player guide (Chinese)](docs/PLAYER-README.md) for installation, runtim
 
 Keep the Overwatch window focused. Some laptops require `Fn` for function keys.
 
-| Keys | Action |
-| --- | --- |
-| WASD / mouse | Move / look |
-| Space / Ctrl | Jump; ascend / descend while flying |
-| Left / right mouse | Primary / secondary attack |
-| R / V | Reload / melee |
-| Shift / E / Q | Hero abilities / ultimate |
-| H | Return to the hero picker |
-| F5 | Hero summons / survival mode |
-| F6 / F7 | Flight / world settings |
-| F8 / F9 | Portals / mob summons |
-| F10 / F11 | Boss destinations / ability resource refill |
+| Keys | Action | Keys | Action |
+| --- | --- | --- | --- |
+| WASD / mouse | Move / look | H | Return to the hero picker |
+| Space / Ctrl | Jump; ascend / descend while flying | F5 | Hero summons / survival mode |
+| Left / right mouse | Primary / secondary attack | F6 / F7 | Flight / world settings |
+| R / V | Reload / melee | F8 / F9 | Portals / mob summons |
+| Shift / E / Q | Hero abilities / ultimate | F10 / F11 | Boss destinations / ability resource refill |
 
 Use number keys or the numeric keypad to select menu items. Follow the on-screen prompts to change pages or go back.
 
 ## Hero restoration progress
 
-**14 heroes and 89 abilities and mechanics. ✅ 76 restored · 🧪 4 implemented, awaiting in-game checks · 🚧 7 partial · ❌ 2 not restored.**
+**14 heroes · 89 abilities and mechanics · ✅ 86 restored · 🚧 1 partial · ❌ 2 not restored**
 
-✅ marks gameplay with in-game evidence, 🧪 marks implementation with offline checks, and 🚧 marks partial coverage. The tables flag any newer behavior that still needs an in-game check. [Status notes and icon sources](docs/media/README.md#技能状态与图标来源).
+The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have been confirmed in game. Expand a hero to see controls and status. [Icon sources](docs/media/README.md#图标规格).
 
-### <img src="docs/media/heroes/genji/portrait.png" width="32" height="32" alt="Genji"> Genji
-
-8/8 restored
+<details>
+<summary><img src="docs/media/heroes/genji/portrait.png" width="24" height="24" alt="Genji"> <strong>Genji</strong> · 8/8 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -98,9 +146,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/genji/wall-climb.png" width="32" height="32" alt="Cyber-Agility (Wall Climb)"> | Cyber-Agility (Wall Climb) | Face a wall: W + Space | ✅ Restored |
 | <img src="docs/media/heroes/genji/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/mccree/portrait.png" width="32" height="32" alt="McCree"> McCree
+</details>
 
-5/6 restored · 1 partial
+<details>
+<summary><img src="docs/media/heroes/mccree/portrait.png" width="24" height="24" alt="McCree"> <strong>McCree</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -108,12 +157,13 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/mccree/fan-the-hammer.png" width="32" height="32" alt="Fan the Hammer"> | Fan the Hammer | RMB | ✅ Restored |
 | <img src="docs/media/heroes/mccree/combat-roll.png" width="32" height="32" alt="Combat Roll"> | Combat Roll | W + Shift | ✅ Restored |
 | <img src="docs/media/heroes/mccree/flashbang.png" width="32" height="32" alt="Flashbang"> | Flashbang | E | ✅ Restored |
-| <img src="docs/media/heroes/mccree/deadeye.png" width="32" height="32" alt="Deadeye"> | Deadeye | Q → wait for lock-on → LMB | 🚧 Partial: visuals incomplete |
+| <img src="docs/media/heroes/mccree/deadeye.png" width="32" height="32" alt="Deadeye"> | Deadeye | Q → wait for lock-on → LMB | ✅ Restored |
 | <img src="docs/media/heroes/mccree/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/pharah/portrait.png" width="32" height="32" alt="Pharah"> Pharah
+</details>
 
-6/6 restored
+<details>
+<summary><img src="docs/media/heroes/pharah/portrait.png" width="24" height="24" alt="Pharah"> <strong>Pharah</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -124,9 +174,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/pharah/hover-jets.png" width="32" height="32" alt="Hover Jets"> | Hover Jets | Hold Space in the air | ✅ Restored |
 | <img src="docs/media/heroes/pharah/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/reaper/portrait.png" width="32" height="32" alt="Reaper"> Reaper
+</details>
 
-5/6 restored · 1 not restored
+<details>
+<summary><img src="docs/media/heroes/reaper/portrait.png" width="24" height="24" alt="Reaper"> <strong>Reaper</strong> · 5/6 restored · 1 not restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -137,9 +188,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/reaper/the-reaping.png" width="32" height="32" alt="The Reaping"> | The Reaping | Approach the soul after a kill | ✅ Restored · healing tested, victim head visuals await checks |
 | <img src="docs/media/heroes/reaper/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/soldier76/portrait.png" width="32" height="32" alt="Soldier: 76"> Soldier: 76
+</details>
 
-6/6 restored
+<details>
+<summary><img src="docs/media/heroes/soldier76/portrait.png" width="24" height="24" alt="Soldier: 76"> <strong>Soldier: 76</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -150,9 +202,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/soldier76/tactical-visor.png" width="32" height="32" alt="Tactical Visor"> | Tactical Visor | Q → LMB | ✅ Restored |
 | <img src="docs/media/heroes/soldier76/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/tracer/portrait.png" width="32" height="32" alt="Tracer"> Tracer
+</details>
 
-5/5 restored
+<details>
+<summary><img src="docs/media/heroes/tracer/portrait.png" width="24" height="24" alt="Tracer"> <strong>Tracer</strong> · 5/5 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -162,9 +215,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/tracer/pulse-bomb.png" width="32" height="32" alt="Pulse Bomb"> | Pulse Bomb | Q | ✅ Restored |
 | <img src="docs/media/heroes/tracer/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/bastion/portrait.png" width="32" height="32" alt="Bastion"> Bastion
+</details>
 
-6/6 restored
+<details>
+<summary><img src="docs/media/heroes/bastion/portrait.png" width="24" height="24" alt="Bastion"> <strong>Bastion</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -175,9 +229,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/bastion/tank.png" width="32" height="32" alt="Configuration: Tank"> | Configuration: Tank | Q → LMB | ✅ Restored |
 | <img src="docs/media/heroes/bastion/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/hanzo/portrait.png" width="32" height="32" alt="Hanzo"> Hanzo
+</details>
 
-6/6 restored
+<details>
+<summary><img src="docs/media/heroes/hanzo/portrait.png" width="24" height="24" alt="Hanzo"> <strong>Hanzo</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -188,9 +243,10 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/hanzo/wall-climb.png" width="32" height="32" alt="Wall Climb"> | Wall Climb | Face a wall: W + Space | ✅ Restored |
 | <img src="docs/media/heroes/hanzo/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/junkrat/portrait.png" width="32" height="32" alt="Junkrat"> Junkrat
+</details>
 
-5/7 restored · 1 partial · 1 not restored
+<details>
+<summary><img src="docs/media/heroes/junkrat/portrait.png" width="24" height="24" alt="Junkrat"> <strong>Junkrat</strong> · 5/7 restored · 1 partial · 1 not restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -202,79 +258,91 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 | <img src="docs/media/heroes/junkrat/total-mayhem.png" width="32" height="32" alt="Total Mayhem"> | Total Mayhem | Automatic on death | 🚧 Partial: visuals incomplete |
 | <img src="docs/media/heroes/junkrat/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/mei/portrait.png" width="32" height="32" alt="Mei"> Mei
+</details>
 
-5/6 restored · 1 partial
+<details>
+<summary><img src="docs/media/heroes/mei/portrait.png" width="24" height="24" alt="Mei"> <strong>Mei</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
 | <img src="docs/media/heroes/mei/endothermic-blaster.png" width="32" height="32" alt="Endothermic Blaster"> | Endothermic Blaster | Hold LMB | ✅ Restored |
-| <img src="docs/media/heroes/mei/icicle.png" width="32" height="32" alt="Endothermic Blaster (Icicle)"> | Endothermic Blaster (Icicle) | RMB | ✅ Restored · original icicle mesh, wall embedding and fade await in-game checks |
+| <img src="docs/media/heroes/mei/icicle.png" width="32" height="32" alt="Endothermic Blaster (Icicle)"> | Endothermic Blaster (Icicle) | RMB | ✅ Restored |
 | <img src="docs/media/heroes/mei/cryo-freeze.png" width="32" height="32" alt="Cryo-Freeze"> | Cryo-Freeze | Shift | ✅ Restored |
-| <img src="docs/media/heroes/mei/ice-wall.png" width="32" height="32" alt="Ice Wall"> | Ice Wall | E to preview, left click to place, E / right click to cancel | 🚧 Partial · placement tested, widened original five-pillar wall and repeated casts await checks |
+| <img src="docs/media/heroes/mei/ice-wall.png" width="32" height="32" alt="Ice Wall"> | Ice Wall | E to preview, left click to place, E / right click to cancel | ✅ Restored |
 | <img src="docs/media/heroes/mei/blizzard.png" width="32" height="32" alt="Blizzard"> | Blizzard | Q | ✅ Restored |
 | <img src="docs/media/heroes/mei/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/torbjorn/portrait.png" width="32" height="32" alt="Torbjörn"> Torbjörn
+</details>
 
-9/10 restored · 1 partial
+<details>
+<summary><img src="docs/media/heroes/torbjorn/portrait.png" width="24" height="24" alt="Torbjörn"> <strong>Torbjörn</strong> · 10/10 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
 | <img src="docs/media/heroes/torbjorn/rivet-gun.png" width="32" height="32" alt="Rivet Gun"> | Rivet Gun | 1 → LMB | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/rivet-gun-secondary.png" width="32" height="32" alt="Rivet Gun (Secondary Fire)"> | Rivet Gun (Secondary Fire) | 1 → RMB | ✅ Restored |
-| <img src="docs/media/heroes/torbjorn/build-turret.png" width="32" height="32" alt="Build Turret"> | Build Turret | Shift to preview, left click to place, right click to cancel | 🚧 Partial · initial placement tested, repeat placement and hand pose fixes await checks |
-| <img src="docs/media/heroes/torbjorn/armor-pack.png" width="32" height="32" alt="Armor Pack"> | Armor Pack | E | ✅ Restored · pickup, armor and growth tested, repeat refresh and full-bright rendering await checks |
+| <img src="docs/media/heroes/torbjorn/build-turret.png" width="32" height="32" alt="Build Turret"> | Build Turret | Shift to preview, left click to place, right click to cancel | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/armor-pack.png" width="32" height="32" alt="Armor Pack"> | Armor Pack | E | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/molten-core.png" width="32" height="32" alt="Molten Core"> | Molten Core | Q | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/forge-hammer.png" width="32" height="32" alt="Forge Hammer"> | Forge Hammer | 2 → LMB | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/turret-repair.png" width="32" height="32" alt="Forge Hammer (Repair)"> | Forge Hammer (Repair) | 2 → LMB on a damaged turret | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/turret-upgrade.png" width="32" height="32" alt="Forge Hammer (Upgrade)"> | Forge Hammer (Upgrade) | 2 → LMB on a level 1 turret | ✅ Restored |
-| <img src="docs/media/heroes/torbjorn/scrap-collector.png" width="32" height="32" alt="Scrap Collector"> | Scrap Collector | Approach scrap after a kill | ✅ Restored · drops on kills, attracts nearby scrap, and credits native scrap |
+| <img src="docs/media/heroes/torbjorn/scrap-collector.png" width="32" height="32" alt="Scrap Collector"> | Scrap Collector | Approach scrap after a kill | ✅ Restored |
 | <img src="docs/media/heroes/torbjorn/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/widowmaker/portrait.png" width="32" height="32" alt="Widowmaker"> Widowmaker
+</details>
 
-5/6 restored · 1 partial
+<details>
+<summary><img src="docs/media/heroes/widowmaker/portrait.png" width="24" height="24" alt="Widowmaker"> <strong>Widowmaker</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
 | <img src="docs/media/heroes/widowmaker/widows-kiss.png" width="32" height="32" alt="Widow’s Kiss (Automatic)"> | Widow’s Kiss (Automatic) | LMB | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/widows-kiss-scoped.png" width="32" height="32" alt="Widow’s Kiss (Scoped)"> | Widow’s Kiss (Scoped) | Hold RMB → LMB | ✅ Restored |
-| <img src="docs/media/heroes/widowmaker/grappling-hook.png" width="32" height="32" alt="Grappling Hook"> | Grappling Hook | Shift to fire, Shift or Space to release early | 🚧 Partial · grapple tested, native 12-second cooldown and aerial momentum await checks |
+| <img src="docs/media/heroes/widowmaker/grappling-hook.png" width="32" height="32" alt="Grappling Hook"> | Grappling Hook | Shift to fire, Shift or Space to release early | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/venom-mine.png" width="32" height="32" alt="Venom Mine"> | Venom Mine | E | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/infra-sight.png" width="32" height="32" alt="Infra-Sight"> | Infra-Sight | Q | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/roadhog/portrait.png" width="32" height="32" alt="Roadhog"> Roadhog
+</details>
 
-5/6 restored · 1 partial
+<details>
+<summary><img src="docs/media/heroes/roadhog/portrait.png" width="24" height="24" alt="Roadhog"> <strong>Roadhog</strong> · 6/6 restored</summary>
 
 | Icon | Ability | Input | Status |
 | :---: | --- | --- | --- |
-| <img src="docs/media/heroes/roadhog/scrap-gun.png" width="32" height="32" alt="Scrap Gun"> | Scrap Gun | Left click | ✅ Restored · spread, ammo and reload tested |
-| <img src="docs/media/heroes/roadhog/scrap-gun-secondary.png" width="32" height="32" alt="Scrap Gun secondary fire"> | Scrap Gun secondary fire | Right click | ✅ Restored · close hit and distant split tested, second burst sound awaits checks |
-| <img src="docs/media/heroes/roadhog/chain-hook.png" width="32" height="32" alt="Chain Hook"> | Chain Hook | Shift | ✅ Restored · hits and pulls tested, left-hand chain and sustained pull await checks |
-| <img src="docs/media/heroes/roadhog/take-a-breather.png" width="32" height="32" alt="Take a Breather"> | Take a Breather | E | ✅ Restored · healing, damage reduction and movement lock tested |
-| <img src="docs/media/heroes/roadhog/whole-hog.png" width="32" height="32" alt="Whole Hog"> | Whole Hog | Q | 🚧 Partial · sustained fire and knockback tested, projectile and muzzle visuals await checks |
+| <img src="docs/media/heroes/roadhog/scrap-gun.png" width="32" height="32" alt="Scrap Gun"> | Scrap Gun | Left click | ✅ Restored |
+| <img src="docs/media/heroes/roadhog/scrap-gun-secondary.png" width="32" height="32" alt="Scrap Gun secondary fire"> | Scrap Gun secondary fire | Right click | ✅ Restored |
+| <img src="docs/media/heroes/roadhog/chain-hook.png" width="32" height="32" alt="Chain Hook"> | Chain Hook | Shift | ✅ Restored |
+| <img src="docs/media/heroes/roadhog/take-a-breather.png" width="32" height="32" alt="Take a Breather"> | Take a Breather | E | ✅ Restored |
+| <img src="docs/media/heroes/roadhog/whole-hog.png" width="32" height="32" alt="Whole Hog"> | Whole Hog | Q | ✅ Restored |
 | <img src="docs/media/heroes/roadhog/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
-### <img src="docs/media/heroes/winston/portrait.png" width="32" height="32" alt="Winston"> Winston
+</details>
 
-0/5 restored · 4 implemented, awaiting in-game checks · 1 partial
+<details>
+<summary><img src="docs/media/heroes/winston/portrait.png" width="24" height="24" alt="Winston"> <strong>Winston</strong> · 5/5 restored</summary>
 
 | Icon | Ability | Input | Status |
 | :---: | --- | --- | --- |
-| <img src="docs/media/heroes/winston/tesla-cannon.png" width="32" height="32" alt="Tesla Cannon"> | Tesla Cannon | Hold left click | 🧪 Implemented · native ammo, arcs and damage await in-game checks |
-| <img src="docs/media/heroes/winston/jump-pack.png" width="32" height="32" alt="Jump Pack"> | Jump Pack | Shift | 🧪 Implemented · launch, landing damage and cooldown sync await in-game checks |
-| <img src="docs/media/heroes/winston/barrier-projector.png" width="32" height="32" alt="Barrier Projector"> | Barrier Projector | E | 🧪 Implemented · original blue hex mesh and projectile blocking await in-game checks |
-| <img src="docs/media/heroes/winston/primal-rage.png" width="32" height="32" alt="Primal Rage"> | Primal Rage | Q | 🚧 Partial · temporary health and punches implemented, native transformation and HUD await checks |
-| <img src="docs/media/heroes/winston/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | 🧪 Implemented · shared melee path awaits in-game checks |
+| <img src="docs/media/heroes/winston/tesla-cannon.png" width="32" height="32" alt="Tesla Cannon"> | Tesla Cannon | Hold left click | ✅ Restored |
+| <img src="docs/media/heroes/winston/jump-pack.png" width="32" height="32" alt="Jump Pack"> | Jump Pack | Shift | ✅ Restored |
+| <img src="docs/media/heroes/winston/barrier-projector.png" width="32" height="32" alt="Barrier Projector"> | Barrier Projector | E | ✅ Restored |
+| <img src="docs/media/heroes/winston/primal-rage.png" width="32" height="32" alt="Primal Rage"> | Primal Rage | Q | ✅ Restored |
+| <img src="docs/media/heroes/winston/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
+
+</details>
 
 ## How it works and development
 
 Both games run together. Overwatch receives input and renders the hero. Minecraft handles the world and combat results, then sends its world image back to the Overwatch window.
 
+<details>
+<summary><strong>Build from source</strong></summary>
+
 Development requires Windows x64, Python 3.13, JDK 21, Gradle 8.10.2, and MinGW-w64. See the [build guide](docs/BUILDING.md), [two-process design](docs/PASSTHROUGH.md), and [documentation index](docs/README.md).
+
+</details>
 
 ## Credits and license
 
