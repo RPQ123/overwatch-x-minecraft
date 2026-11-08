@@ -76,7 +76,7 @@ This is a non-commercial fan project, unaffiliated with Blizzard Entertainment, 
   <tr>
     <td width="33%" valign="top">
       <strong>🧭 World tools</strong><br>
-      Toggle flight, set the time, build portals, summon mobs, travel to boss areas, or refill ability resources.
+      Toggle flight, set the time, build portals, summon mobs, travel to boss areas, or instantly charge your ultimate and reset cooldowns.
     </td>
     <td width="33%" valign="top">
       <strong>🌲 Twilight Forest and shaders</strong><br>
@@ -127,7 +127,7 @@ Keep the Overwatch window focused. Some laptops require holding <kbd>Fn</kbd> to
 | <kbd>🖱️ Left click</kbd> | 🔫 Primary attack | | <kbd>F8</kbd> | 🌀 Portals |
 | <kbd>🖱️ Right click</kbd> | 🎯 Secondary attack | | <kbd>F9</kbd> | 👾 Mob summons |
 | <kbd>R</kbd> | 🔄 Reload | | <kbd>F10</kbd> | 🐉 Boss destinations |
-| <kbd>V</kbd> | 👊 Melee | | <kbd>F11</kbd> | 🔋 Ability resource refill |
+| <kbd>V</kbd> | 👊 Melee | | <kbd>F11</kbd> | 🔋 Charge ultimate / reset cooldowns |
 | <kbd>Shift</kbd> | ✨ Ability 1 | |  |  |
 | <kbd>E</kbd> | ✨ Ability 2 | |  |  |
 | <kbd>Q</kbd> | 💥 Ultimate | |  |  |

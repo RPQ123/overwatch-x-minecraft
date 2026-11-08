@@ -76,7 +76,7 @@
   <tr>
     <td width="33%" valign="top">
       <strong>🧭 世界工具</strong><br>
-      切换飞行、调整时间、建造传送门、召唤怪物、前往 Boss 区域或补充技能资源。
+      切换飞行、调整时间、建造传送门、召唤怪物、前往 Boss 区域，或一键充满大招、恢复冷却。
     </td>
     <td width="33%" valign="top">
       <strong>🌲 暮色森林与光影</strong><br>
@@ -127,7 +127,7 @@
 | <kbd>🖱️ 左键</kbd> | 🔫 主攻击 | | <kbd>F8</kbd> | 🌀 传送门 |
 | <kbd>🖱️ 右键</kbd> | 🎯 次攻击 | | <kbd>F9</kbd> | 👾 怪物召唤 |
 | <kbd>R</kbd> | 🔄 装弹 | | <kbd>F10</kbd> | 🐉 Boss 入口 |
-| <kbd>V</kbd> | 👊 近战 | | <kbd>F11</kbd> | 🔋 技能资源补充 |
+| <kbd>V</kbd> | 👊 近战 | | <kbd>F11</kbd> | 🔋 大招充能 / 冷却恢复 |
 | <kbd>Shift</kbd> | ✨ 技能 1 | |  |  |
 | <kbd>E</kbd> | ✨ 技能 2 | |  |  |
 | <kbd>Q</kbd> | 💥 终极技能 | |  |  |
