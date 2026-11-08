@@ -25,6 +25,11 @@ user32.GetSystemMetrics.argtypes = [ctypes.c_int]
 user32.GetSystemMetrics.restype = ctypes.c_int
 user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
 user32.ShowWindow.restype = wintypes.BOOL
+user32.IsIconic.argtypes = [wintypes.HWND]
+user32.IsIconic.restype = wintypes.BOOL
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.SetForegroundWindow.restype = wintypes.BOOL
+user32.GetForegroundWindow.restype = wintypes.HWND
 user32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.c_int,
                                 ctypes.c_int, ctypes.c_int, ctypes.c_uint]
 user32.SetWindowPos.restype = wintypes.BOOL
@@ -181,18 +186,58 @@ def _pid_is_alive(pid: int) -> bool:
         return False
 
 
+def render_pair(native_pid: int, minecraft_pid: int) -> tuple[Window, Window]:
+    pair = []
+    for pid, class_name in ((native_pid, 'TankWindowClass'), (minecraft_pid, 'GLFW30')):
+        candidates = [item for item in windows_for_pid(pid)
+                      if _window_class(item.handle) == class_name and not user32.IsIconic(item.handle)]
+        if len(candidates) != 1:
+            raise ValueError(f'未取得唯一且可见的渲染窗口 {class_name}（PID {pid}）。')
+        pair.append(candidates[0])
+    return pair[0], pair[1]
+
+
+def guest_window_owner(configured, pid: int):
+    guest = psutil.Process(pid)
+    java = configured.get('java')
+    arguments = guest.cmdline()
+    index = arguments.index('--gameDir') + 1
+    if (not guest.is_running() or Path(guest.exe()).resolve() not in (java, java.with_name('javaw.exe'))
+            or index >= len(arguments) or Path(arguments[index]).resolve() != configured.get('profile')):
+        raise ValueError('Minecraft 窗口不属于当前独立档案。')
+    return guest
+
+
+def focus_render_pair(native_pid: int, minecraft_pid: int, native_hwnd: int, minecraft_hwnd: int,
+                      *, foreground_only: bool = False) -> bool:
+    """Place the original window in front of the live guest without resizing either."""
+    native, minecraft = render_pair(native_pid, minecraft_pid)
+    if (native.handle, minecraft.handle) != (native_hwnd, minecraft_hwnd):
+        raise ValueError('加载期间渲染窗口身份已变化。')
+    if foreground_only:
+        return user32.GetForegroundWindow() == native_hwnd
+    flags = SWP_NOACTIVATE | SWP_NOSENDCHANGING | 0x0001 | 0x0002 | 0x4000
+    if (not user32.SetWindowPos(native_hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, flags)
+            or not user32.SetWindowPos(minecraft_hwnd, native_hwnd, 0, 0, 0, 0, flags)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return user32.GetForegroundWindow() == native_hwnd or bool(user32.SetForegroundWindow(native_hwnd))
+
+
 def arrange(native_pid: int, minecraft_pid: int, width: int = 0, height: int = 0,
-            *, native_fullscreen: bool = False, show_minecraft: bool = True) -> dict:
+            *, native_fullscreen: bool = False, show_minecraft: bool = True, covered: bool = False) -> dict:
     """Keep MC visible and switchable without changing its render resolution."""
     if not _pid_is_alive(native_pid) or not _pid_is_alive(minecraft_pid):
         raise RuntimeError("window layout requires live native and Minecraft processes")
-    native = windows_for_pid(native_pid)
-    minecraft = windows_for_pid(minecraft_pid) if show_minecraft else windows_for_pid(minecraft_pid,visible_only=False)
-    if not native:
-        raise RuntimeError(f"no visible native window for PID {native_pid}")
-    if not minecraft:
-        raise RuntimeError(f"no visible Minecraft window for PID {minecraft_pid}")
-    ow, mc = native[0], minecraft[0]
+    if covered:
+        ow, mc = render_pair(native_pid, minecraft_pid)
+    else:
+        native = windows_for_pid(native_pid)
+        minecraft = windows_for_pid(minecraft_pid) if show_minecraft else windows_for_pid(minecraft_pid,visible_only=False)
+        if not native:
+            raise RuntimeError(f"no visible native window for PID {native_pid}")
+        if not minecraft:
+            raise RuntimeError(f"no visible Minecraft window for PID {minecraft_pid}")
+        ow, mc = native[0], minecraft[0]
     screen_width = max(640, user32.GetSystemMetrics(0))
     screen_height = max(480, user32.GetSystemMetrics(1))
     resize = int(width) > 0 and int(height) > 0

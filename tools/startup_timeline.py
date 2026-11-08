@@ -14,11 +14,13 @@ REQUEST_ENV = 'OWMC_STARTUP_REQUEST'
 
 
 @contextmanager
-def startup_request(root):
+def startup_request(root, *, loading=None):
     """Pass the launcher's monotonic origin to its one supervised child."""
     previous = os.environ.get(REQUEST_ENV)
     request = dict(root=str(Path(root).resolve()), requestedNs=time.perf_counter_ns(),
-                   requestId=uuid.uuid4().hex, launcherPid=os.getpid())
+                   requestId=loading.request_id if loading else uuid.uuid4().hex, launcherPid=os.getpid())
+    if loading:
+        request['covered'] = True
     os.environ[REQUEST_ENV] = json.dumps(request)
     try:
         yield request
@@ -63,6 +65,9 @@ class StartupTimeline:
         self.origin = origin
         self.path = root / 'research/launcher' / (
             'startup-timeline-' + time.strftime('%Y%m%d-%H%M%S') + f'-{time.time_ns() % 1_000_000_000:09d}.json')
+        if request.get('covered') is True:
+            from startup_cover import covered_timeline_path
+            self.path = covered_timeline_path(root, request['requestId'])
         self.document = dict(schemaVersion=1, clock='Python perf_counter_ns',
                              originNs=origin, request=request, supervisorPid=os.getpid(),
                              status='starting', events=[],

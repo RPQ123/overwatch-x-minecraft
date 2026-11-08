@@ -15,7 +15,11 @@ public record Text(String key) {
 }''',
     'net/minecraft/client/MinecraftClient.java': '''package net.minecraft.client;
 import net.minecraft.client.gui.screen.Screen;
-public class MinecraftClient {public Screen currentScreen;}''',
+public class MinecraftClient {
+    public Screen currentScreen;
+    public Object overlay;
+    public Object getOverlay(){return overlay;}
+}''',
     'net/minecraft/client/gui/widget/ButtonWidget.java': '''package net.minecraft.client.gui.widget;
 import net.minecraft.text.Text;
 public class ButtonWidget {
@@ -59,6 +63,9 @@ public class StartupPromptCheck {
         client.currentScreen=new BackupPromptScreen(EXP);client.currentScreen.backup.active=false;
         TwilightTrialStartup.tick(client,true);check(client.currentScreen.backup.presses==0);
         client.currentScreen.backup.active=true;
+        client.overlay=new Object();
+        TwilightTrialStartup.tick(client,true);check(client.currentScreen.backup.presses==0);
+        client.overlay=null;
         TwilightTrialStartup.tick(client,true);TwilightTrialStartup.tick(client,true);
         check(client.currentScreen.backup.presses==1&&client.currentScreen.skip.presses==0);
         client.currentScreen=new BackupPromptScreen(EXP);

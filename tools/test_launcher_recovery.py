@@ -266,7 +266,7 @@ root=Path(__file__).resolve().parents[1]
 app.ROOT=root
 class InertUI:
     def __init__(self,window,backend):
-        self.window=window;self.closed=False
+        self.window=window;self.closed=False;self.loading=None;self.loading_error=None
         window.title(owner.TITLE);window.geometry('260x100')
         user=ctypes.WinDLL('user32');kernel=ctypes.WinDLL('kernel32')
         user.GetThreadDesktop.argtypes=[ctypes.c_uint32];user.GetThreadDesktop.restype=ctypes.c_void_p
@@ -275,6 +275,8 @@ class InertUI:
         assert user.GetUserObjectInformationW(user.GetThreadDesktop(kernel.GetCurrentThreadId()),2,desktop,ctypes.sizeof(desktop),ctypes.byref(needed))
         (root/'actual-desktop.txt').write_text(desktop.value,encoding='utf-8')
         window.after(20000,self.close)
+    def begin_auto_loading(self):
+        pass
     def close(self):
         self.closed=True;self.window.destroy()
 if os.environ.get('C1_FIXTURE_LEGACY')=='1':

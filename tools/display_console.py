@@ -71,11 +71,11 @@ class WinConsole:
         self.user.ShowWindow(hwnd,4)
 
 
-def native_startupinfo():
-    """AllocConsole honors this initial state without a visible first frame."""
+def native_startupinfo(*, covered=False):
+    """A covered start keeps the render window showable from its first call."""
     startup=subprocess.STARTUPINFO()
     startup.dwFlags|=subprocess.STARTF_USESHOWWINDOW
-    startup.wShowWindow=0
+    startup.wShowWindow=4 if covered else 0  # SW_SHOWNOACTIVATE or legacy console suppression.
     return startup
 
 

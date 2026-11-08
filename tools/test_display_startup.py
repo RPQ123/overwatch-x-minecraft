@@ -183,10 +183,33 @@ class SessionPresentationTests(unittest.TestCase):
                 stack.enter_context(patch.object(session,name,return_value=value))
             stack.enter_context(patch.object(session,'ResearchProcess'))
             stack.enter_context(patch.object(session,'start_console_guard'))
+            stack.enter_context(patch.object(session,'startup_render_budget'))
+            native=Mock(create_time=Mock(return_value=100))
+            stack.enter_context(patch.object(session.psutil,'Process',return_value=native))
+            stack.enter_context(patch.object(session,'verified_owner',return_value=native))
             spawn=stack.enter_context(patch.object(session.subprocess,'Popen',return_value=Mock(pid=8)))
             session.launch_native(dict(nativeFullscreen=True),1)
             self.assertEqual(spawn.call_args.kwargs['creationflags'],session.subprocess.CREATE_NO_WINDOW)
-            self.assertNotIn('startupinfo',spawn.call_args.kwargs)
+            self.assertEqual(spawn.call_args.kwargs['startupinfo'].wShowWindow,0)
+            session.launch_native(dict(nativeFullscreen=True),1,loading=Mock())
+            self.assertEqual(spawn.call_args.kwargs['startupinfo'].wShowWindow,4)
+
+    def test_covered_guest_disables_both_glfw_hide_paths(self):
+        with tempfile.TemporaryDirectory() as folder, ExitStack() as stack:
+            stack.enter_context(patch.object(session,'PROFILE',Path(folder)))
+            command=['javaw','-Dowmc.startHidden=true','-Dowmc.allowWindowShow=false','-Dowmc.backgroundExport=true']
+            prepare=stack.enter_context(patch.object(session,'prepare',return_value=command))
+            spawn=stack.enter_context(patch.object(session.subprocess,'Popen',
+                return_value=Mock(pid=7,poll=Mock(return_value=None))))
+            guest=dict(sourcePid=7,published=4)
+            stack.enter_context(patch.object(session,'guest_ready',return_value=guest))
+            self.assertEqual(session.launch_guest(False,display_settings=dict(width=1920,height=1080),loading=Mock()),guest)
+            prepare.assert_called_once_with(visible=False,timeline=None)
+            command=spawn.call_args.args[0]
+            self.assertIn('-Dowmc.startHidden=false',command)
+            self.assertIn('-Dowmc.backgroundExport=false',command)
+            self.assertFalse(any(flag in command for flag in ('-Dowmc.startHidden=true','-Dowmc.backgroundExport=true')))
+            self.assertEqual(spawn.call_args.kwargs['startupinfo'].wShowWindow,4)
 
     def test_guest_reveal_requires_fresh_composition_and_is_requested_only_once(self):
         guest=dict(sourcePid=7,generation=123)

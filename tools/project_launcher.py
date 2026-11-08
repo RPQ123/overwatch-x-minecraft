@@ -25,6 +25,8 @@ from typing import Any
 import psutil
 
 from modpack.config import PackPaths, OW_RELATIVE, OW_SHA256
+from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress,
+                           matching_timeline, presentation_receipt)
 
 ROOT = Path(__file__).resolve().parents[1]
 EXE_RELATIVE = Path(OW_RELATIVE)
@@ -219,15 +221,55 @@ class SessionBackend:
         except (psutil.Error, KeyError, OSError, TypeError, ValueError):
             return False
 
-    def start(self, log: Path) -> dict:
+    def start(self, log: Path, *, loading=None) -> dict:
         active = self.supervisors()
         if active:
             return {'result': 'existing-supervisor', 'supervisorPids': [p.pid for p in active],
                     'message': '已存在独立监督，继续查看现有会话；未新增模块所有者。'}
         self.validate_start()
+        if loading:
+            loading.checkpoint()
         process = self.spawn([str(self.python), '-u', str(self.root / 'tools/launch_passthrough_session.py')], log)
+        if loading:
+            self.loading_child = process
         return {'result': 'supervisor-started', 'supervisorPid': process.pid, 'log': str(log),
                 'message': '后台启动请求已提交；选人/合成/战斗状态仍需分别确认。'}
+
+    def start_covered(self, action, log, ticket) -> dict:
+        """Own exactly this request until the UI acknowledges or cancels the handoff."""
+        from startup_timeline import startup_request
+        if action not in START_ACTIONS:
+            raise ValueError('该操作不能使用启动加载画面。')
+        ticket.checkpoint()
+        running = self.running()
+        if action == 'restart':
+            self.stop(log)
+        elif (running and action == 'reboot') or (not running and self.project_processes()):
+            self.robust_stop(log)
+        ticket.checkpoint()
+        with startup_request(self.root, loading=ticket):
+            result = self.start(log, loading=ticket)
+        if result['result'] == 'existing-supervisor':
+            return result
+        process = self.loading_child
+        try:
+            while process.poll() is None:
+                if ticket.state() == 'released':
+                    return {**result, 'phase': 'hero-selection', 'coveredHandoff': True}
+                ticket.checkpoint()
+                time.sleep(.1)
+            raise RuntimeError(f'启动监督进程已退出（{process.returncode}）。')
+        except Exception:
+            try:
+                process.wait(timeout=90)
+            except subprocess.TimeoutExpired as failure:
+                raise RuntimeError('启动监督仍在处理取消请求，请查看本次日志。') from failure
+            timeline = self.loading_timeline(ticket.request_id)
+            started = any(event.get('name') in ('native_spawn_requested', 'mc_jvm_spawn_requested')
+                          for event in timeline.get('events', ()))
+            if started and not self.supervisors() and self.project_processes():
+                self.robust_stop(log)
+            raise
 
     def project_processes(self) -> list[psutil.Process]:
         """Exact native exe path or a JVM whose --gameDir is a project profile; never name-only."""
@@ -392,6 +434,29 @@ class SessionBackend:
         except OSError:
             return []
 
+    def loading_timeline(self, request_id: str) -> dict:
+        try:
+            path = covered_timeline_path(self.root, request_id)
+            if path.stat().st_size < 256 * 1024:
+                data = read_object(path)
+                request = data.get('request') or {}
+                if request.get('covered') is True and request.get('requestId') == request_id:
+                    return data
+        except (OSError, ValueError, TypeError):
+            pass
+        return {}
+
+    def focus_loading_pair(self, status, receipt, *, foreground_only=False) -> bool:
+        from window_layout import focus_render_pair, guest_window_owner
+        native = self.native_identity(status)
+        if native is None or native.create_time() != receipt['nativeCreated']:
+            raise ValueError('原版渲染进程身份已变化。')
+        guest = guest_window_owner(self.paths, receipt['guestPid'])
+        if guest.create_time() != receipt['guestCreated']:
+            raise ValueError('Minecraft 渲染进程身份已变化。')
+        return focus_render_pair(native.pid, guest.pid, receipt['nativeHwnd'], receipt['guestHwnd'],
+                                 foreground_only=foreground_only)
+
     def snapshot(self) -> dict:
         now = time.time()
         errors = []
@@ -422,7 +487,8 @@ class SessionBackend:
         return {'status': status, 'settings': settings, 'nativeAlive': native is not None,
                 'supervisorPids': [p.pid for p in supervisors], 'fresh': fresh, 'projectPids': project,
                 'action': action, 'actionActive': self.action_active(action),
-                'recentLog': self.recent_log(action), 'errors': errors, 'resourceWarnings': resource_warnings}
+                'recentLog': self.recent_log(action), 'errors': errors, 'resourceWarnings': resource_warnings,
+                'loadingTimeline': self.loading_timeline(action.get('requestId', '')) if action.get('loading') else {}}
 
 
 def execute_action(backend: SessionBackend, action: str, log: Path, world_name: str = '') -> dict:
@@ -468,7 +534,8 @@ def execute_action(backend: SessionBackend, action: str, log: Path, world_name: 
     raise ValueError(f'Unknown action: {action}')
 
 
-def run_action(backend: SessionBackend, action: str, log: Path, world_name: str = '', request_id: str = '') -> int:
+def run_action(backend: SessionBackend, action: str, log: Path, world_name: str = '', request_id: str = '',
+               *, loading=False) -> int:
     mutex = NamedMutex(backend.root, 'action')
     if not mutex.acquire():
         print('已有启动/恢复操作进行中；未重复执行。', flush=True)
@@ -476,9 +543,14 @@ def run_action(backend: SessionBackend, action: str, log: Path, world_name: str 
     record = {'action': action, 'phase': 'running', 'pid': os.getpid(), 'requestId': request_id or uuid.uuid4().hex,
               'created': psutil.Process().create_time(), 'startedMs': round(time.time() * 1000),
               'log': str(log)}
+    if loading:
+        record['loading'] = True
     try:
         write_object(backend.action_path, record)
-        result = execute_action(backend, action, log, world_name)
+        if loading:
+            result = backend.start_covered(action, log, LoadingTicket.open(backend.root, request_id))
+        else:
+            result = execute_action(backend, action, log, world_name)
         record.update(phase='succeeded', result=result, finishedMs=round(time.time() * 1000))
         return 0
     except Exception as failure:
@@ -648,6 +720,10 @@ class LauncherUI:
         self.pending_request_id = ''
         self.pending_log: Path | None = None
         self.pending_action = ''
+        self.loading = None
+        self.loading_ticket = None
+        self.loading_error = None
+        self.loading_retry = None
         self.last_snapshot: dict = {}
         self.action_buttons: list[Any] = []
         self.phase = 0
@@ -824,20 +900,28 @@ class LauncherUI:
         if self.last_snapshot.get('actionActive'):
             self.action_var.set('另一独立操作仍在运行；若已打开设置，请先保存或关闭该窗口。')
             return
-        if action in ('start', 'restart', 'reboot', 'toggle') and not self._supervised():
+        supervised = self._supervised()
+        covered = action in START_ACTIONS and (not supervised or action in ('restart', 'reboot'))
+        if covered and not self.open_loading(action):
+            return
+        if action in START_ACTIONS and not supervised:
             if getattr(self, 'startup_pending', False):
                 self.startup_requested = (action, world_name)
                 self.action_var.set('正在校验本地文件，通过后自动开始。')
                 return
             preparation = getattr(self, 'startup_result', None)
             if preparation and not preparation.get('ready'):
-                self.first_run.set_note('；'.join(preparation.get('errors', [])))
+                note = '；'.join(preparation.get('errors', []))
+                self.first_run.set_note(note)
                 self.show_page('setup')
+                self.fail_loading(note)
                 return
             blockers = self.backend.paths.launch_blockers()
             if blockers:
-                self.first_run.set_note('；'.join(blockers))
+                note = '；'.join(blockers)
+                self.first_run.set_note(note)
                 self.show_page('setup')
+                self.fail_loading(note)
                 return
         self.auto_start_pending = False
         stamp = time.strftime('%Y%m%d-%H%M%S') + f'-{time.time_ns() % 1_000_000_000:09d}'
@@ -848,6 +932,10 @@ class LauncherUI:
         if world_name:
             command.extend(('--world-name', world_name))
         try:
+            if covered:
+                self.loading_log = log
+                self.loading_ticket = LoadingTicket.create(self.backend.root, request_id, self.loading_deadline_ns)
+                command.append('--loading')
             self.pending = self.backend.spawn(command, log)
             self.pending_request_id = request_id
             self.pending_log = log
@@ -856,7 +944,136 @@ class LauncherUI:
             for button in self.action_buttons:
                 button.set_enabled(False)
         except Exception as failure:
-            messagebox.showerror('无法提交操作', str(failure), parent=self.window)
+            if covered:
+                self.fail_loading(str(failure))
+            else:
+                messagebox.showerror('无法提交操作', str(failure), parent=self.window)
+
+    def open_loading(self, action):
+        from launcher_loading_screen import LoadingScreen
+        self.loading_action = action
+        if self.loading:
+            return True
+        if self.loading_error:
+            self.loading_error.destroy()
+            self.loading_error = None
+        self.loading_deadline_ns = time.perf_counter_ns() + LOAD_SECONDS * 10**9
+        self.loading_step = '正在检查本地文件'
+        self.loading_log = self.backend.logs/'loading-preflight.log'
+        self.loading_focus_needed = False
+        try:
+            self.loading = LoadingScreen(self.window, self.backend.root/'assets/launcher/owmc.png',
+                                         lambda: self.fail_loading('启动已取消。'), self.try_loading_focus)
+        except Exception as failure:
+            self.fail_loading(str(failure))
+            return False
+        return True
+
+    def begin_auto_loading(self):
+        if self.auto_start_pending and self.page == 'main':
+            self.open_loading('start')
+
+    def end_loading(self, decision=None):
+        cover, ticket = self.loading, self.loading_ticket
+        self.loading = self.loading_ticket = None
+        try:
+            if ticket and decision:
+                try:
+                    ticket.finish(decision)
+                except (OSError, RuntimeError):
+                    if decision == 'released':
+                        try:
+                            ticket.finish('cancelled')
+                        except OSError:
+                            pass
+                    raise
+        finally:
+            if cover:
+                cover.close()
+
+    def fail_loading(self, detail):
+        from launcher_loading_screen import show_loading_error
+        self.auto_start_pending = False
+        self.startup_requested = None
+        try:
+            self.end_loading('cancelled')
+        except OSError as failure:
+            detail += f' 取消回执写入失败（{failure}）。'
+        if self.loading_log.name == 'loading-preflight.log':
+            try:
+                self.loading_log.parent.mkdir(parents=True, exist_ok=True)
+                with self.loading_log.open('a', encoding='utf-8') as stream:
+                    stream.write(f'{self.loading_step}  {detail}\n')
+            except OSError:
+                pass
+        self.window.attributes('-topmost', False)
+        self.action_var.set(detail[:180])
+        if self.loading_error:
+            self.loading_error.destroy()
+        self.loading_error = show_loading_error(self.window, self.loading_step, detail, self.loading_log,
+                                                self.retry_loading, self.close)
+
+    def retry_loading(self):
+        self.loading_error.destroy()
+        self.loading_error = None
+        self.loading_retry = self.loading_action
+
+    def try_loading_focus(self):
+        ticket = self.loading_ticket
+        if not ticket or not self.loading or self.loading.fading:
+            return
+        receipt = presentation_receipt(self.last_snapshot, ticket.request_id, round(time.time()*1000))
+        if receipt is None:
+            return
+        try:
+            ticket.checkpoint()
+            if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt):
+                self.loading_focus_needed = True
+                return
+            self.loading.fade(lambda: self.finish_loading(ticket))
+        except (OSError, ValueError, KeyError, RuntimeError, psutil.Error) as failure:
+            self.fail_loading(str(failure))
+
+    def finish_loading(self, ticket):
+        if self.loading_ticket is not ticket:
+            return
+        receipt = presentation_receipt(self.last_snapshot, ticket.request_id, round(time.time()*1000))
+        if not receipt:
+            self.fail_loading('切换窗口时合成信号已失效。')
+            return
+        try:
+            if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt, foreground_only=True):
+                self.loading_focus_needed = True
+                self.loading.restore_opacity()
+                return
+            self.end_loading('released')
+        except (OSError, ValueError, KeyError, RuntimeError, psutil.Error) as failure:
+            self.fail_loading(str(failure))
+
+    def update_loading(self):
+        if not self.loading:
+            return
+        if time.perf_counter_ns() >= self.loading_deadline_ns:
+            self.fail_loading(f'启动等待超过 {LOAD_SECONDS} 秒。')
+            return
+        ticket = self.loading_ticket
+        timeline = matching_timeline(self.last_snapshot, ticket.request_id) if ticket else {}
+        done, total, self.loading_step = loading_progress(bool((self.startup_result or {}).get('ready')), timeline)
+        if timeline.get('status') == 'failed':
+            event = next((event for event in timeline.get('events', ()) if event.get('name') == 'startup_failed'), {})
+            self.fail_loading(event.get('error') or '启动监督报告失败。')
+            return
+        if ticket and self.loading_step == '合成画面已连通' and not presentation_receipt(
+                self.last_snapshot, ticket.request_id, round(time.time()*1000)):
+            done -= 1
+            self.loading_step = '正在等待新的合成帧'
+        if not self.loading.fading:
+            try:
+                self.loading.update(done, total, self.loading_step, focus_required=self.loading_focus_needed)
+            except (OSError, RuntimeError) as failure:
+                self.fail_loading(str(failure))
+                return
+            self.try_loading_focus()
 
     def toggle_auto_start(self) -> None:
         if self._busy():
@@ -956,6 +1173,8 @@ class LauncherUI:
             self.action_var.set(note[:180])
             if not self._supervised() and not self._busy():
                 self.show_page('setup')
+            if self.loading and not self.loading_ticket:
+                self.fail_loading(note or '启动准备检查失败。')
 
     def _try_startup_action(self) -> None:
         if self.startup_pending or not self.startup_result or not self.startup_result.get('ready'):
@@ -966,6 +1185,8 @@ class LauncherUI:
         if self._busy() or self._supervised():
             self.auto_start_pending = False
             self.startup_requested = None
+            if self.loading and not self.loading_ticket:
+                self.end_loading()
             return
         requested = self.startup_requested
         self.startup_requested = None
@@ -975,6 +1196,8 @@ class LauncherUI:
             self.dispatch(*requested)
         elif automatic and self.page == 'main' and not self._leftovers():
             self.dispatch('start')
+        elif self.loading and not self.loading_ticket:
+            self.end_loading()
 
     def tick(self) -> None:
         if self.closed:
@@ -997,8 +1220,21 @@ class LauncherUI:
                                                         self.pending_log or self.backend.logs))
                 if self.pending_action.startswith('setup-'):
                     self.first_run.completed(code, self.pending_request_id, record)
+                if self.loading_ticket and self.loading_ticket.request_id == self.pending_request_id:
+                    if (not code and record.get('requestId') == self.pending_request_id
+                            and (record.get('result') or {}).get('result') == 'existing-supervisor'):
+                        self.end_loading('cancelled')
+                    else:
+                        self.fail_loading(friendly_completion(code, self.pending_request_id, record,
+                                                              self.pending_log or self.backend.logs))
                 self.pending_action = ''
+            if self.loading_retry and 'supervisorPids' in self.last_snapshot and not self._busy():
+                action = 'reboot' if self._leftovers() or self._supervised() else self.loading_retry
+                self.loading_retry = None
+                self.refresh_startup()
+                self.dispatch(action)
             self._try_startup_action()
+            self.update_loading()
             busy = self._busy()
             for button in self.action_buttons:
                 button.set_enabled(not busy)
@@ -1020,8 +1256,10 @@ class LauncherUI:
                 title, detail, color = self._view()
                 self._render(title, detail, color, self.last_snapshot.get('settings') or {})
                 self._animate(busy)
-        except Exception:
+        except Exception as failure:
             traceback.print_exc()
+            if self.loading:
+                self.fail_loading(str(failure))
         if not self.polling:
             self.polling = True
             threading.Thread(target=self._read_snapshot, daemon=True).start()
@@ -1040,8 +1278,11 @@ class LauncherUI:
 
     def close(self) -> None:
         self.closed = True
-        # No terminate(), shutdown API, game input or supervisor lifetime here.
-        self.window.destroy()
+        try:
+            if getattr(self, 'loading', None):
+                self.end_loading('cancelled')
+        finally:
+            self.window.destroy()
 
 
 class _SlantButton:
@@ -1401,6 +1642,7 @@ def main() -> int:
     parser.add_argument('--log', type=Path)
     parser.add_argument('--world-name', default='')
     parser.add_argument('--request-id', default='')
+    parser.add_argument('--loading', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--snapshot', action='store_true', help='Read-only machine state; never launch a game')
     parser.add_argument('--setup-check', action='store_true', help='Read-only first-run environment check; no download/game')
     arguments = parser.parse_args()
@@ -1416,7 +1658,8 @@ def main() -> int:
     if arguments.action:
         backend = SessionBackend(ROOT)
         log = arguments.log or backend.logs / (time.strftime('%Y%m%d-%H%M%S') + '-' + arguments.action + '.log')
-        return run_action(backend, arguments.action, log, arguments.world_name, arguments.request_id)
+        return run_action(backend, arguments.action, log, arguments.world_name, arguments.request_id,
+                          loading=arguments.loading)
     mutex = NamedMutex(ROOT, 'ui')
     from launcher_ui_owner import Owner, acquire_ui, notify_ready
     if not acquire_ui(ROOT, mutex, NamedMutex):
@@ -1432,13 +1675,16 @@ def main() -> int:
         window.withdraw()
         ui = LauncherUI(window, backend)
         prepare_launcher_input(window)
+        if ui is not None:
+            ui.begin_auto_loading()
         show_launcher_window(window)
         owner.watch(window, ui)
         window.after_idle(lambda: notify_ready(ROOT))
         try:
             # Float above a fullscreen game for a moment so a click never opens "nothing".
-            window.attributes('-topmost', True)
-            window.after(1500, lambda: window.attributes('-topmost', False))
+            if ui is not None and not ui.loading and not ui.loading_error:
+                window.attributes('-topmost', True)
+                window.after(1500, lambda: window.attributes('-topmost', False))
         except Exception:
             pass
         window.mainloop()
