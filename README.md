@@ -96,7 +96,7 @@
   <h3><a href="https://pan.baidu.com/s/1dt433i2fr2vXsVXvQznhUg?pwd=1234">⬇ 百度网盘下载 OWMC v1.0.0</a></h3>
   <p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong></p>
   <p>提取码 <kbd>1234</kbd> · 更新于 <strong>2026-11-08</strong></p>
-  <p><strong>SHA256</strong> <code>bcc3e6635457aede0ae30a337d95dc4b54dd86b44eb70d4d0091717e7129d50d</code></p>
+  <p><strong>SHA256</strong> <code>58d08b12f640c368419c91e9177f80ec840ed627aed24322cd9634935de547aa</code></p>
 </div>
 <!-- /DOWNLOAD_LINKS -->
 

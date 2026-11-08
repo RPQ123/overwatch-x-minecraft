@@ -1,5 +1,6 @@
 {
   "schemaVersion": 1,
+  "autoStart": false,
   "account": {"mode": "development-offline"},
   "rendererPolicy": "optional-sodium",
   "paths": {

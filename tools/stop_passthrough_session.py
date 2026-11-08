@@ -152,6 +152,12 @@ def stop_session(keep_minecraft=False,*,output_root=None,allow_window_close=Fals
         save()
     try:
         stop_supervisor()
+        try:
+            from startup_isolation import recover_startup_isolation
+            recover_startup_isolation(paths())
+        except (OSError, ValueError, RuntimeError) as failure:
+            record['startupIsolationRecoveryError'] = str(failure)
+            save()
         for identity in identities:
             result=normal_close(identity,folder/f"native-{identity['pid']}")
             record['nativeNormalClose'].append(result)

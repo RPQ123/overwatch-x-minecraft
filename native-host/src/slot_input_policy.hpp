@@ -1,6 +1,10 @@
 #pragma once
 #include <windows.h>
 namespace passthrough {
+inline bool startupInputMessage(unsigned message){
+    return (message>=WM_KEYFIRST&&message<=WM_KEYLAST)||(message>=WM_MOUSEFIRST&&message<=WM_MOUSELAST)
+        ||(message>=WM_NCLBUTTONDOWN&&message<=WM_NCXBUTTONDBLCLK)||message==WM_INPUT||message==WM_CONTEXTMENU;
+}
 inline bool weaponSlotKey(unsigned key){return (key>='0'&&key<='9')||(key>=VK_NUMPAD0&&key<=VK_NUMPAD9);}
 inline bool weaponSlotMouse(unsigned message){return message==WM_MOUSEWHEEL||message==WM_MOUSEHWHEEL||message==WM_MBUTTONDOWN||message==WM_MBUTTONUP;}
 inline bool deadeyeMotionKey(unsigned key,unsigned flightKey=VK_F6){return key=='W'||key=='S'||key=='A'||key=='D'||key==VK_SPACE||key==VK_CONTROL||key==VK_LCONTROL||key==VK_RCONTROL||key==flightKey||key==VK_SHIFT||key==VK_LSHIFT||key==VK_RSHIFT;}

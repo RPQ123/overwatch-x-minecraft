@@ -412,7 +412,7 @@ def wait_for_selection(pid,settings,recovery,record):
         write_status(record)
         time.sleep(.1)
     raise RuntimeError('Original client exited during hero selection')
-def launch_guest(visible,timeline=None,*,display_settings=None,loading=None):
+def launch_guest(visible,timeline=None,*,display_settings=None,loading=None,isolation=None):
     if loading:loading.checkpoint()
     command=prepare(visible=False,timeline=timeline)
     if display_settings is None:
@@ -435,11 +435,16 @@ def launch_guest(visible,timeline=None,*,display_settings=None,loading=None):
     with (PROFILE/'logs/launch.log').open('w',encoding='utf-8') as log:
         if loading:loading.checkpoint()
         spawn_options={'startupinfo':native_startupinfo(covered=True)} if loading else {}
-        process=subprocess.Popen(command,cwd=PROFILE,stdout=log,stderr=subprocess.STDOUT,
-                                 creationflags=subprocess.CREATE_NO_WINDOW,**spawn_options)
+        spawn = subprocess.Popen
+        if isolation:
+            spawn = isolation.spawn
+            spawn_options['role'] = 'mc'
+        process=spawn(command,cwd=PROFILE,stdout=log,stderr=subprocess.STDOUT,
+                      creationflags=subprocess.CREATE_NO_WINDOW,**spawn_options)
     if timeline:timeline.mark('mc_jvm_spawned',pid=process.pid,creation=psutil.Process(process.pid).create_time())
     startup_log=GuestStartupLog(PROFILE/'logs/launch.log',timeline)
     def ready():
+        if isolation:isolation.check()
         startup_log.poll()
         if loading and process.poll() is not None:
             raise RuntimeError('Minecraft 在世界就绪前已退出。')
@@ -561,7 +566,7 @@ def write_status(value):
         except PermissionError:
             if attempt<11:time.sleep(.005)
     return False
-def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None):
+def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolation=None):
     # Always read live identities here, after any guest wait, never a cached PID.
     pids=native_pids();pid=pids[0] if pids else None
     if loading and pid:raise RuntimeError('覆盖式启动检测到已有 OW 进程，请先正常关闭。')
@@ -578,8 +583,12 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None):
         # The independent console guard only operates on verified console HWNDs.
         try:
             if loading:loading.checkpoint()
-            pid=subprocess.Popen([str(EXE)],cwd=EXE.parent,creationflags=subprocess.CREATE_NO_WINDOW,
-                                 startupinfo=native_startupinfo(covered=bool(loading))).pid
+            spawn_options=dict(startupinfo=native_startupinfo(covered=bool(loading)))
+            spawn = subprocess.Popen
+            if isolation:
+                spawn = isolation.spawn
+                spawn_options['role'] = 'ow'
+            pid=spawn([str(EXE)],cwd=EXE.parent,creationflags=subprocess.CREATE_NO_WINDOW,**spawn_options).pid
         except OSError:
             restore_display()
             raise
@@ -590,6 +599,7 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None):
         native_identity=verified_owner(pid,psutil.Process(pid).create_time())
         native_created=native_identity.create_time()
         def ready_visible():
+            if isolation:isolation.check()
             if loading and not native_identity.is_running():
                 raise RuntimeError('OW 在原版场景就绪前已退出。')
             reveal_native_render(pid,native_created,native=native_identity)
@@ -621,9 +631,10 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None):
     return pid,display_mode
 
 
-def _launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None):
+def _launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None,isolation=None):
     """Only cold, independent loading can overlap; attachment waits for both."""
     options={'loading':loading} if loading else {}
+    if isolation:options['isolation']=isolation
     def verify_world(value):
         if value.get('worldName')!=settings.get('worldName','Overwatch Survival World'):
             raise RuntimeError('Minecraft has a different world/configuration loaded. Stop the game from the launcher, then start again.')
@@ -646,12 +657,12 @@ def _launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None):
         pid,display_mode=launch_native(settings,map_id,timeline,guest=guest,**options)
     return guest,pid,display_mode
 
-def launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None):
-    try:return _launch_pair(settings,map_id,guest,timeline,loading=loading)
+def launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None,isolation=None):
+    try:return _launch_pair(settings,map_id,guest,timeline,loading=loading,isolation=isolation)
     finally:startup_render_budget.restore()
 
 
-def await_loading_handoff(pid, guest, settings, loading, record, timeline):
+def await_loading_handoff(pid, guest, settings, loading, record, timeline, *, isolation=None):
     from window_layout import guest_window_owner, render_pair
     native = psutil.Process(pid)
     minecraft = guest_window_owner(paths(), guest['sourcePid'])
@@ -680,6 +691,7 @@ def await_loading_handoff(pid, guest, settings, loading, record, timeline):
                 raise RuntimeError('当前请求没有合成回执。')
             return True
         loading.checkpoint()
+        if isolation:isolation.check()
         ow, mc = pair()
         report = read_report(BUILD/f'world-live-{pid}.json')
         sample = api('health', timeout=.25)
@@ -692,6 +704,8 @@ def await_loading_handoff(pid, guest, settings, loading, record, timeline):
             evidence = None
             gate.previous = None
         if evidence:
+            if isolation and (report.get('startupInputBlocked') is not True or not isolation.allow_ow_focus()):
+                return None
             last_receipt = dict(evidence, requestId=loading.request_id, supervisorPid=os.getpid(),
                                 nativePid=pid, nativeCreated=native_created, nativeHwnd=ow.handle,
                                 guestPid=minecraft.pid, guestCreated=guest_created, guestHwnd=mc.handle)
@@ -710,7 +724,7 @@ def await_loading_handoff(pid, guest, settings, loading, record, timeline):
     timeline.mark('loading_handoff')
 
 
-def run(settings,timeline=None,*,loading=None):
+def initialize_session(settings,timeline,loading,*,isolation=None):
     from configure_passthrough import validate_flight_key
     # Validate before any files, guest launch or native attachment. F7..F11
     # already own portals/mobs/charge and cannot double as flight.
@@ -739,13 +753,15 @@ def run(settings,timeline=None,*,loading=None):
     except (OSError,ValueError,KeyError):guest=None
     cold_guest=guest is None
     options={'loading':loading} if loading else {}
+    if isolation:options['isolation']=isolation
     if loading and guest:
         raise RuntimeError('覆盖式启动需要全新会话，请先正常关闭已有 Minecraft。')
     guest,pid,display_mode=launch_pair(settings,map_id,guest,timeline,**options)
     manifest['guest\\build\\libs\\owmc-guest-0.1.0.jar']=hashlib.sha256((PROFILE/'mods/owmc-guest-0.1.0.jar').read_bytes()).hexdigest()
     if not loading and cold_guest and settings.get('startupParallel',True):arrange_visible_windows(pid,guest,settings,reveal=False)
     if timeline:timeline.mark('compositor_attach_started')
-    connect_stages(pid,{'world-live'},**options)
+    stage_options={'loading':loading} if loading else {}
+    connect_stages(pid,{'world-live'},**stage_options)
     if timeline:
         presentation=read_report(BUILD/f'world-live-{pid}.json')
         timeline.mark('compositor_ready',report={key:presentation.get(key) for key in (
@@ -754,7 +770,7 @@ def run(settings,timeline=None,*,loading=None):
     # Install the shared native weapon observers there, before the user can
     # confirm an uncalibrated initial hero. Body coupling still waits for the
     # actual gameplay selection, preserving the original picker animation.
-    connect_stages(pid,{'body-sync','weapon-gate','native-emissions'},**options)
+    connect_stages(pid,{'body-sync','weapon-gate','native-emissions'},**stage_options)
     if timeline:timeline.mark('native_observers_ready')
     if not loading:arrange_visible_windows(pid,guest,settings)
     if settings.get('hideHeroPrompt'):
@@ -764,7 +780,19 @@ def run(settings,timeline=None,*,loading=None):
     record={'ready':False,'phase':'hero-selection','nativePid':pid,'startedMs':round(time.time()*1000),
             'settings':settings,'loadedFiles':manifest,'state':None,'heroHealth':None,
             'nativeDisplayMode':display_mode}
-    if loading:await_loading_handoff(pid,guest,settings,loading,record,timeline)
+    if loading:await_loading_handoff(pid,guest,settings,loading,record,timeline,isolation=isolation)
+    return record,guest,pid,files
+
+
+def run(settings,timeline=None,*,loading=None):
+    if loading:
+        from startup_isolation import StartupIsolation
+        loading.checkpoint()
+        with StartupIsolation(paths(), loading) as isolation:
+            record,guest,pid,files=initialize_session(settings,timeline,loading,isolation=isolation)
+        timeline.mark('loading_isolation_restored',pendingRecovery=isolation.pending)
+    else:
+        record,guest,pid,files=initialize_session(settings,timeline,loading)
     print('Original animated hero selection over Minecraft; confirm a supported hero to enter gameplay.',flush=True)
     if timeline:timeline.finish('hero-selection',pid=pid)
     recovery=GuestRecovery(guest)

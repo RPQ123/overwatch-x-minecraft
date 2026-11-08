@@ -24,6 +24,7 @@
 #ifdef OWMC_LIVE_BLEND
 #include "live_world_blend.hpp"
 #include "pose_warp.hpp"
+#include "startup_input_event.hpp"
 #include "hud_hint_region.hpp"
 #include "provided_debug_ui.hpp"
 #include "native_frame_limit.hpp"
@@ -70,6 +71,8 @@ bool tracerViewmodelScope=false;
 bool captured=false,fixture=false;UINT width=0,height=0;std::thread::id renderOwner;std::atomic<DWORD> renderThread{0};
 HWND inputWindow=nullptr;WNDPROC originalWindowProc=nullptr;MovementIntent movementIntent;std::atomic<unsigned> flightKey{VK_F6};
 NativeSlotFilter nativeSlotFilter;
+std::atomic<bool> startupInputBlocked{false};
+bool startupInputScope(){return startupInputBlocked.load(std::memory_order_relaxed);}
 bool deadeyeMotionScope();
 bool hanzoMotionScope();
 bool controlMotionScope();
@@ -80,6 +83,13 @@ unsigned nativeViewMode();
 bool slotInputScope(){CURSORINFO cursor{sizeof(CURSORINFO),0,nullptr,{0,0}};return active&&viewMode==1&&GetForegroundWindow()==inputWindow&&GetCursorInfo(&cursor)&&!(cursor.flags&CURSOR_SHOWING);}
 LRESULT CALLBACK movementMessages(HWND w,UINT message,WPARAM key,LPARAM data) {
     if(active) {
+        if(startupInputScope()){
+            if(message==WM_MOUSEACTIVATE)return MA_NOACTIVATEANDEAT;
+            if(startupInputMessage(message)){
+                if(message==WM_INPUT&&GET_RAWINPUT_CODE_WPARAM(key)==RIM_INPUT)return DefWindowProcW(w,message,key,data);
+                return 0;
+            }
+        }
         if(slotFilterScope()){
             if((message==WM_KEYDOWN||message==WM_KEYUP||message==WM_SYSKEYDOWN||message==WM_SYSKEYUP)&&nativeSlotFilter.blocksSlotKey(unsigned(key))){nativeSlotFilter.filteredKeys++;return 0;}
             if(weaponSlotMouse(message)){nativeSlotFilter.filteredMouse++;return 0;}
@@ -634,7 +644,7 @@ bool attach(IDXGISwapChain* s) {
     if(!fixture){viewLightMapId=lightBackingScene();fixedViewLight=viewLightMapId!=0;}
 #endif
     if(!fixture){auto library=GetModuleHandleW(L"minhook.x64.dll");wchar_t location[32768]{},exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
-        if(!library||!GetModuleFileNameW(library,location,32768)||_wcsicmp(location,(std::filesystem::path(exe).parent_path()/L"minhook.x64.dll").c_str())||!nativeSlotFilter.start(slotFilterScope,library,controlMotionScope,nativeWeaponSelectionScope)){stop();return reject("native slot input filter");}}
+        if(!library||!GetModuleFileNameW(library,location,32768)||_wcsicmp(location,(std::filesystem::path(exe).parent_path()/L"minhook.x64.dll").c_str())||!nativeSlotFilter.start(slotFilterScope,library,controlMotionScope,nativeWeaponSelectionScope,startupInputScope)){stop();return reject("native slot input filter");}}
 #ifdef OWMC_LIVE_BLEND
     std::error_code traceError;wchar_t tracePath[32768]{};bool traceRequested=false;
     if(!fixture&&GetModuleFileNameW(moduleHandle,tracePath,32768)){
@@ -688,6 +698,7 @@ void report(const std::filesystem::path& dir) {
     // HNZ2 diagnostics exist only with the live compositor input owner.
     out<<",\"hanzoControlProtocol\":2,\"hanzoCameraSelections\":0,\"hanzoMotionLocked\":"<<(hanzoMotionScope()?"true":"false")<<",\"hanzoMotionFrames\":"<<hanzoMotionFrames.load();
 #endif
+    out<<",\"startupInputBlocked\":"<<(active&&nativeSlotFilter.enabled&&startupInputScope()?"true":"false");
     out<<",\"deadeyeInputProtocol\":1,\"deadeyeInputGuardAvailable\":"<<(active&&nativeSlotFilter.enabled&&!nativeSlotFilter.restored?"true":"false")<<",\"deadeyeMotionLocked\":"<<(deadeyeMotionScope()?"true":"false")<<",\"deadeyeMotionKeys\":"<<nativeSlotFilter.motionKeys<<",\"deadeyeMotionMouse\":"<<nativeSlotFilter.motionMouse;
 #ifdef OWMC_LIVE_BLEND
     out<<",\"handMaskTraceEnabled\":"<<(handMaskTrace.enabled()?"true":"false")<<",\"handMaskTrace\":[";
@@ -707,6 +718,9 @@ DWORD WINAPI worker(void*) {
     std::filesystem::path exe,dll;
     if(!owmc::runningResearchClient(exe)||!owmc::moduleFilePath(moduleHandle,dll))return 0;
     auto dir=dll.parent_path();
+    const auto startupEvent=startupInputEventName();
+    startupInputBlocked=startupInputEventExists(startupEvent);
+    auto nextStartupCheck=GetTickCount64()+8;
     try {auto base=reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)),engine=pointer(base+0x181e3e0),p=pointer(engine+0x900),q=pointer(p+0x2e0),r=pointer(q);
         if(!attach(reinterpret_cast<IDXGISwapChain*>(pointer(r+8)))) {failures++;report(dir);return 0;}
         HANDLE event=CreateEventW(nullptr,TRUE,FALSE,(
@@ -730,6 +744,10 @@ DWORD WINAPI worker(void*) {
             120000
 #endif
             ) stopRequested=true;
+        if(startupInputBlocked&&GetTickCount64()>=nextStartupCheck){
+            startupInputBlocked=startupInputEventExists(startupEvent);
+            nextStartupCheck=GetTickCount64()+8;
+        }
 #ifdef OWMC_LIVE_BLEND
             // The command packet exists during CPU recording, outside the GPU
             // callbacks on this beta. This already-existing worker only reads

@@ -25,7 +25,7 @@ from typing import Any
 import psutil
 
 from modpack.config import PackPaths, OW_RELATIVE, OW_SHA256
-from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress,
+from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress, milestones,
                            matching_timeline, presentation_receipt)
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -252,11 +252,18 @@ class SessionBackend:
         if result['result'] == 'existing-supervisor':
             return result
         process = self.loading_child
+        release_deadline = None
         try:
             while process.poll() is None:
                 if ticket.state() == 'released':
-                    return {**result, 'phase': 'hero-selection', 'coveredHandoff': True}
-                ticket.checkpoint()
+                    if 'loading_isolation_restored' in milestones(self.loading_timeline(ticket.request_id)):
+                        return {**result, 'phase': 'hero-selection', 'coveredHandoff': True}
+                    if release_deadline is None:
+                        release_deadline = time.monotonic() + 12
+                    if time.monotonic() >= release_deadline:
+                        raise TimeoutError('未收到启动静音和输入恢复回执。')
+                else:
+                    ticket.checkpoint()
                 time.sleep(.1)
             raise RuntimeError(f'启动监督进程已退出（{process.returncode}）。')
         except Exception:
@@ -267,8 +274,13 @@ class SessionBackend:
             timeline = self.loading_timeline(ticket.request_id)
             started = any(event.get('name') in ('native_spawn_requested', 'mc_jvm_spawn_requested')
                           for event in timeline.get('events', ()))
-            if started and not self.supervisors() and self.project_processes():
-                self.robust_stop(log)
+            if not self.supervisors():
+                try:
+                    from startup_isolation import recover_startup_isolation
+                    recover_startup_isolation(self.paths)
+                finally:
+                    if started and self.project_processes():
+                        self.robust_stop(log)
             raise
 
     def project_processes(self) -> list[psutil.Process]:
@@ -961,6 +973,7 @@ class LauncherUI:
         self.loading_step = '正在检查本地文件'
         self.loading_log = self.backend.logs/'loading-preflight.log'
         self.loading_focus_needed = False
+        self.loading_input_held = False
         try:
             self.loading = LoadingScreen(self.window, self.backend.root/'assets/launcher/owmc.png',
                                          lambda: self.fail_loading('启动已取消。'), self.try_loading_focus)
@@ -979,6 +992,9 @@ class LauncherUI:
         try:
             if ticket and decision:
                 try:
+                    if decision == 'released' and cover:
+                        cover.close()
+                        cover = None
                     ticket.finish(decision)
                 except (OSError, RuntimeError):
                     if decision == 'released':
@@ -1027,6 +1043,9 @@ class LauncherUI:
             return
         try:
             ticket.checkpoint()
+            self.loading_input_held = self.loading.input_held()
+            if self.loading_input_held:
+                return
             if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt):
                 self.loading_focus_needed = True
                 return
@@ -1042,6 +1061,10 @@ class LauncherUI:
             self.fail_loading('切换窗口时合成信号已失效。')
             return
         try:
+            self.loading_input_held = self.loading.input_held()
+            if self.loading_input_held:
+                self.loading.restore_opacity()
+                return
             if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt, foreground_only=True):
                 self.loading_focus_needed = True
                 self.loading.restore_opacity()
@@ -1069,7 +1092,8 @@ class LauncherUI:
             self.loading_step = '正在等待新的合成帧'
         if not self.loading.fading:
             try:
-                self.loading.update(done, total, self.loading_step, focus_required=self.loading_focus_needed)
+                self.loading.update(done, total, self.loading_step, focus_required=self.loading_focus_needed,
+                                    input_held=self.loading_input_held)
             except (OSError, RuntimeError) as failure:
                 self.fail_loading(str(failure))
                 return
@@ -1150,6 +1174,8 @@ class LauncherUI:
     def _read_startup(self) -> None:
         try:
             from modpack.first_run import startup_check
+            from startup_isolation import recover_startup_isolation
+            recover_startup_isolation(self.backend.paths)
             self.startup_updates.put(startup_check(self.backend.root,layout_only=True))
         except Exception as failure:
             self.startup_updates.put(dict(ready=False, errors=['启动准备检查失败：' + str(failure)]))
@@ -1678,6 +1704,8 @@ def main() -> int:
         if ui is not None:
             ui.begin_auto_loading()
         show_launcher_window(window)
+        if ui is not None and ui.loading:
+            ui.loading.take_focus()
         owner.watch(window, ui)
         window.after_idle(lambda: notify_ready(ROOT))
         try:

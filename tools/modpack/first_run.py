@@ -102,7 +102,7 @@ def prepare(root: Path, ow: Path, world: str, *, expected_config: str | None = N
         raise ValueError('现有游戏设置格式不受支持，未覆盖。')
     # Existing profiles/settings are never replaced by the wizard. The settings
     # page remains the guarded place to change an existing world's selection.
-    value = {**paths.config, 'schemaVersion': 1,
+    value = {'autoStart': False, **paths.config, 'schemaVersion': 1,
              'paths': {**paths.overrides, 'owExecutable': paths.store_path(ow)}}
     write_json(paths.config_path, value)
     if not settings_path.exists():

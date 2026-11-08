@@ -370,6 +370,7 @@ class Builder:
         self.record(PROFILE_DIRECTORY+'/owmc-boss-mods.json','owmc')
         configuration=read_json(self.destination/'config/launcher.json') if (self.destination/'config/launcher.json').is_file() else dict(schemaVersion=1)
         configuration.setdefault('account',dict(mode='development-offline'))
+        configuration.setdefault('autoStart',False)
         configuration['rendererPolicy']='required-sodium'
         configuration.setdefault('paths',{}).update(profile=PROFILE_DIRECTORY,minecraft='minecraft-1.21.1')
         write_json(self.destination/'config/launcher.json',configuration);self.record('config/launcher.json','owmc')
@@ -418,7 +419,7 @@ class Builder:
             from modpack.private_assets import PrivateBundle
             private_summary=PrivateBundle(self,PackPaths(self.root)).stage()
             write_json(self.destination/'config/launcher.json',dict(schemaVersion=1,
-                account={'mode':'development-offline'},rendererPolicy='optional-sodium',paths=dict(
+                autoStart=False,account={'mode':'development-offline'},rendererPolicy='optional-sodium',paths=dict(
                     privateAssets='private-assets',meshAssets='private-assets/owmc-mesh',
                     heroVoiceAssets='private-assets/ow1-zhcn-2016/thnu-full',ffmpeg='tools/ffmpeg/ffmpeg.exe')))
             self.record('config/launcher.json','owmc')
@@ -434,7 +435,7 @@ class Builder:
             from modpack.game_client import stage as stage_client
             from modpack.config import read_json
             client_summary=stage_client(self,PackPaths(self.root))
-            configuration=read_json(self.destination/'config/launcher.json') if (self.destination/'config/launcher.json').is_file() else dict(schemaVersion=1)
+            configuration=read_json(self.destination/'config/launcher.json') if (self.destination/'config/launcher.json').is_file() else dict(schemaVersion=1,autoStart=False)
             configuration.setdefault('paths',{})['owExecutable']=client_summary['executable']
             write_json(self.destination/'config/launcher.json',configuration)
             self.record('config/launcher.json','owmc')

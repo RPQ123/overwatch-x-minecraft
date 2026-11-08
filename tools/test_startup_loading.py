@@ -140,12 +140,13 @@ class WindowFixtures(unittest.TestCase):
 class HandOffFixtures(unittest.TestCase):
     def ui(self):
         ui = object.__new__(launcher.LauncherUI)
-        ui.loading = Mock(fading=False)
+        ui.loading = Mock(fading=False, input_held=Mock(return_value=False))
         ui.loading_ticket = Mock(request_id=REQUEST)
         ui.loading_error = None
         ui.loading_log = Path('action.log')
         ui.loading_step = '正在连接画面'
         ui.loading_focus_needed = False
+        ui.loading_input_held = False
         ui.window = Mock()
         ui.backend = Mock()
         ui.action_var = Mock()
@@ -178,6 +179,17 @@ class HandOffFixtures(unittest.TestCase):
         ticket.finish.assert_called_once_with('released')
         view.close.assert_called_once()
         self.assertIsNone(ui.loading)
+
+    def test_held_input_during_fade_keeps_cover_and_ticket_active(self):
+        ui = self.ui()
+        ticket, view = ui.loading_ticket, ui.loading
+        ui.backend.focus_loading_pair.return_value = True
+        view.input_held.side_effect = [False, True]
+        ui.try_loading_focus()
+        view.fade.call_args.args[0]()
+        view.restore_opacity.assert_called_once()
+        ticket.finish.assert_not_called()
+        self.assertTrue(ui.loading_input_held)
 
     def test_failed_timeline_releases_overlay_before_reporting_error(self):
         ui = self.ui()

@@ -53,7 +53,9 @@ class LoadingScreen:
             self.window.overrideredirect(True)
             self.window.attributes('-topmost', True)
             self.window.attributes('-alpha', ALPHA)
-            self.window.bind('<Escape>', lambda _: cancel())
+            self.window.bind('<KeyPress>', lambda _: 'break')
+            self.window.bind('<KeyRelease>', lambda _: 'break')
+            self.window.bind('<Escape>', lambda _: self.cancel_key(cancel))
             self.window.protocol('WM_DELETE_WINDOW', cancel)
             self.canvas = tk.Canvas(self.window, bg=BACKGROUND, highlightthickness=0)
             self.canvas.pack(fill='both', expand=True)
@@ -69,6 +71,7 @@ class LoadingScreen:
             self.window.deiconify()
             self.window.update_idletasks()
             self.update(0, 1, '正在检查本地文件')
+            self.take_focus()
             self.window.update_idletasks()
             # Flush the mapped backdrop before the coordinator can create a game HWND.
             ctypes.WinDLL('dwmapi').DwmFlush()
@@ -76,9 +79,24 @@ class LoadingScreen:
             self.close()
             raise
 
-    def update(self, completed, total, step, *, focus_required=False):
+    @staticmethod
+    def cancel_key(cancel):
+        cancel()
+        return 'break'
+
+    def take_focus(self):
+        self.window.focus_force()
+
+    @staticmethod
+    def input_held():
+        from window_layout import user32
+        user32.GetAsyncKeyState.argtypes = [ctypes.c_int]
+        user32.GetAsyncKeyState.restype = ctypes.c_short
+        return any(user32.GetAsyncKeyState(key) & 0x8000 for key in range(1, 255))
+
+    def update(self, completed, total, step, *, focus_required=False, input_held=False):
         bounds = place_cover(self.window, self.owner)
-        state = (bounds, completed, total, step, focus_required)
+        state = (bounds, completed, total, step, focus_required, input_held)
         if state == self.last:
             return
         self.last = state
@@ -96,8 +114,11 @@ class LoadingScreen:
             start = x-length//2
             canvas.create_rectangle(start, y+28, start+length*completed/total, y+34, fill=ACCENT, outline='')
         canvas.create_text(x, y+68, text=step, fill=TEXT, font=(FONT, 13))
+        canvas.create_text(x, y+94, text='启动中已暂时静音并锁定按键', fill=DIM, font=(FONT, 11))
         if focus_required:
-            canvas.create_text(x, y+109, text='点击进入游戏', fill=ACCENT, font=(FONT, 13, 'bold'), tags='focus')
+            canvas.create_text(x, y+124, text='点击进入游戏', fill=ACCENT, font=(FONT, 13, 'bold'), tags='focus')
+        if input_held:
+            canvas.create_text(x, y+151, text='请先松开按键和鼠标', fill=DIM, font=(FONT, 11))
         canvas.create_text(x, bottom-36, text='取消启动', fill=DIM, font=(FONT, 11), tags='cancel')
 
     def fade(self, complete):
@@ -123,9 +144,12 @@ class LoadingScreen:
     def close(self):
         if not self.closed:
             self.closed = True
-            if self.fade_job is not None:
-                self.window.after_cancel(self.fade_job)
-            self.window.destroy()
+            try:
+                if self.fade_job is not None:
+                    self.window.after_cancel(self.fade_job)
+                self.window.destroy()
+            except tk.TclError:
+                pass  # The owner may already have destroyed all its windows.
 
 
 def show_loading_error(owner, step, detail, log, retry, exit_launcher):

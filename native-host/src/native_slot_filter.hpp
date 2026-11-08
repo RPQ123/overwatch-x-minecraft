@@ -13,7 +13,7 @@ namespace passthrough {
 class NativeSlotFilter {
     using Toggle=int(WINAPI*)(void*);using Create=int(WINAPI*)(void*,void*,void**);
     struct Site{void* target;std::array<unsigned char,16> before;};
-    std::vector<Site> sites;Toggle disable=nullptr;bool(*gate)()=nullptr;bool(*motionGate)()=nullptr;bool(*weaponSelectionGate)()=nullptr;
+    std::vector<Site> sites;Toggle disable=nullptr;bool(*gate)()=nullptr;bool(*motionGate)()=nullptr;bool(*weaponSelectionGate)()=nullptr;bool(*startupGate)()=nullptr;
     inline static NativeSlotFilter* owner=nullptr;
     inline static decltype(&GetRawInputBuffer) bufferOriginal=nullptr;
     inline static decltype(&GetRawInputData) dataOriginal=nullptr;
@@ -27,28 +27,52 @@ class NativeSlotFilter {
     template<class T> static T proc(HMODULE library,const char* name){union {FARPROC raw;T fn;} x{GetProcAddress(library,name)};return x.fn;}
     static bool scoped(){return owner&&owner->enabled&&owner->gate&&owner->gate();}
     static bool motionScoped(){return owner&&owner->motionGate&&owner->motionGate();}
+    static bool startupScoped(){return owner&&owner->enabled&&owner->startupGate&&owner->startupGate();}
+    static bool validPayload(const RAWINPUT& raw,size_t bytes){
+        if(raw.header.dwType==RIM_TYPEKEYBOARD)return bytes>=offsetof(RAWINPUT,data)+sizeof(RAWKEYBOARD);
+        if(raw.header.dwType==RIM_TYPEMOUSE)return bytes>=offsetof(RAWINPUT,data)+sizeof(RAWMOUSE);
+        return false;
+    }
     static UINT WINAPI bufferHook(PRAWINPUT out,PUINT size,UINT header){
         UINT cap=size?*size:0,result=bufferOriginal(out,size,header);if(owner)owner->bufferCalls++;
-        if(out&&result!=UINT(-1)&&result<=1024&&cap<=1024*1024&&header==sizeof(RAWINPUTHEADER)&&scoped()){
+        bool startup=startupScoped();
+        if(out&&result!=UINT(-1)&&result<=1024&&cap<=1024*1024&&header==sizeof(RAWINPUTHEADER)&&(startup||scoped())){
             size_t at=0;for(UINT i=0;i<result;i++){
                 if(at+sizeof(RAWINPUTHEADER)>cap)break;
                 auto r=reinterpret_cast<RAWINPUT*>(reinterpret_cast<unsigned char*>(out)+at);
                 if(r->header.dwSize<sizeof(RAWINPUTHEADER)||r->header.dwSize>cap-at)break;
-                if(r->header.dwSize>=offsetof(RAWINPUT,data)+sizeof(RAWKEYBOARD))owner->filter(*r,motionScoped());
-                at+=(r->header.dwSize+sizeof(DWORD)-1)&~size_t(sizeof(DWORD)-1);
+                if(validPayload(*r,r->header.dwSize))owner->filter(*r,!startup&&motionScoped(),startup);
+                constexpr size_t alignment=sizeof(void*);
+                at+=(r->header.dwSize+alignment-1)&~(alignment-1);
             }
         }return result;
     }
     static UINT WINAPI dataHook(HRAWINPUT input,UINT command,LPVOID out,PUINT size,UINT header){
         UINT result=dataOriginal(input,command,out,size,header);if(owner)owner->dataCalls++;
-        if(out&&command==RID_INPUT&&result!=UINT(-1)&&result>=sizeof(RAWINPUTHEADER)&&header==sizeof(RAWINPUTHEADER)&&scoped()){
-            auto r=static_cast<RAWINPUT*>(out);if(result>=offsetof(RAWINPUT,data)+sizeof(RAWKEYBOARD))owner->filter(*r,motionScoped());
+        bool startup=startupScoped();
+        if(out&&command==RID_INPUT&&result!=UINT(-1)&&result>=sizeof(RAWINPUTHEADER)&&header==sizeof(RAWINPUTHEADER)&&(startup||scoped())){
+            auto r=static_cast<RAWINPUT*>(out);
+            if(r->header.dwSize<=result&&validPayload(*r,r->header.dwSize))owner->filter(*r,!startup&&motionScoped(),startup);
         }return result;
     }
-    static SHORT WINAPI asyncHook(int key){if(scoped()&&(owner->blocksSlotKey(unsigned(key))||key==VK_MBUTTON||(motionScoped()&&deadeyeMotionKey(unsigned(key))))){owner->keyQueries++;return 0;}return asyncOriginal(key);}
-    static SHORT WINAPI keyHook(int key){if(scoped()&&(owner->blocksSlotKey(unsigned(key))||key==VK_MBUTTON||(motionScoped()&&deadeyeMotionKey(unsigned(key))))){owner->keyQueries++;return 0;}return keyOriginal(key);}
-    static BOOL WINAPI keyboardHook(PBYTE keys){auto result=keyboardOriginal(keys);if(result&&keys&&scoped()){bool motion=motionScoped();for(unsigned i=0;i<256;i++)if(owner->blocksSlotKey(i)||i==VK_MBUTTON||(motion&&deadeyeMotionKey(i)))keys[i]=0;}return result;}
+    static bool blockQuery(int key){return startupScoped()||(scoped()&&(owner->blocksSlotKey(unsigned(key))||key==VK_MBUTTON||(motionScoped()&&deadeyeMotionKey(unsigned(key)))));}
+    static SHORT WINAPI asyncHook(int key){if(blockQuery(key)){owner->keyQueries++;return 0;}return asyncOriginal(key);}
+    static SHORT WINAPI keyHook(int key){if(blockQuery(key)){owner->keyQueries++;return 0;}return keyOriginal(key);}
+    static BOOL WINAPI keyboardHook(PBYTE keys){
+        auto result=keyboardOriginal(keys);
+        if(result&&keys&&startupScoped())std::memset(keys,0,256);
+        else if(result&&keys&&scoped()){bool motion=motionScoped();for(unsigned i=0;i<256;i++)if(owner->blocksSlotKey(i)||i==VK_MBUTTON||(motion&&deadeyeMotionKey(i)))keys[i]=0;}
+        return result;
+    }
     static void messageFilter(MSG* msg,bool removed){
+        if(msg&&startupScoped()){
+            if(startupInputMessage(msg->message)){
+                if(msg->message==WM_INPUT&&removed&&GET_RAWINPUT_CODE_WPARAM(msg->wParam)==RIM_INPUT)
+                    DefWindowProcW(msg->hwnd,msg->message,msg->wParam,msg->lParam);
+                msg->message=WM_NULL;msg->wParam=0;msg->lParam=0;
+            }
+            return;
+        }
         if(!msg||!scoped())return;
         owner->messageCalls++;bool drop=false;bool motion=motionScoped();
         if(((msg->message==WM_KEYDOWN||msg->message==WM_KEYUP||msg->message==WM_SYSKEYDOWN||msg->message==WM_SYSKEYUP)&&owner->blocksSlotKey(unsigned(msg->wParam)))
@@ -80,14 +104,15 @@ public:
             &&weaponSelectionGate&&weaponSelectionGate());
     }
     std::atomic<bool> enabled{false},restored{true};std::atomic<uint64_t> filteredKeys{0},filteredMouse{0},bufferCalls{0},dataCalls{0},keyQueries{0},messageCalls{0},motionKeys{0},motionMouse{0};
-    bool filter(RAWINPUT& raw,bool motion=false){
-        if(raw.header.dwType==RIM_TYPEKEYBOARD&&blocksSlotKey(raw.data.keyboard.VKey)){
+    bool filter(RAWINPUT& raw,bool motion=false,bool startup=false){
+        if(raw.header.dwType==RIM_TYPEKEYBOARD&&(startup||blocksSlotKey(raw.data.keyboard.VKey))){
             raw.data.keyboard.VKey=255;raw.data.keyboard.MakeCode=0;raw.data.keyboard.Message=WM_NULL;filteredKeys++;return true;
         }
         if(motion&&raw.header.dwType==RIM_TYPEKEYBOARD&&deadeyeMotionKey(raw.data.keyboard.VKey)&&!(raw.data.keyboard.Flags&RI_KEY_BREAK)){
             raw.data.keyboard.VKey=255;raw.data.keyboard.MakeCode=0;raw.data.keyboard.Message=WM_NULL;motionKeys++;return true;
         }
         if(raw.header.dwType==RIM_TYPEMOUSE){
+            if(startup){raw.data.mouse={};filteredMouse++;return true;}
             constexpr USHORT bits=RI_MOUSE_WHEEL|RI_MOUSE_HWHEEL|RI_MOUSE_MIDDLE_BUTTON_DOWN|RI_MOUSE_MIDDLE_BUTTON_UP;
             bool changed=false;
             if(raw.data.mouse.usButtonFlags&bits){raw.data.mouse.usButtonFlags&=~bits;raw.data.mouse.usButtonData=0;filteredMouse++;changed=true;}
@@ -97,9 +122,9 @@ public:
             return changed;
         }return false;
     }
-    bool start(bool(*admit)(),HMODULE library,bool(*lockMotion)()=nullptr,bool(*selectWeapon)()=nullptr){
+    bool start(bool(*admit)(),HMODULE library,bool(*lockMotion)()=nullptr,bool(*selectWeapon)()=nullptr,bool(*lockStartup)()=nullptr){
         if(owner||!sites.empty()||!library)return false;
-        gate=admit;motionGate=lockMotion;weaponSelectionGate=selectWeapon;
+        gate=admit;motionGate=lockMotion;weaponSelectionGate=selectWeapon;startupGate=lockStartup;
         auto initialize=proc<int(WINAPI*)()>(library,"MH_Initialize");auto create=proc<Create>(library,"MH_CreateHook");auto enable=proc<Toggle>(library,"MH_EnableHook");disable=proc<Toggle>(library,"MH_DisableHook");
         if(!initialize||!create||!enable||!disable)return false;
         int initialized=initialize();if(initialized!=0&&initialized!=1)return false;

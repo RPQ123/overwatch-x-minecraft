@@ -1,7 +1,8 @@
 #include "../src/native_slot_filter.hpp"
+#include "../src/startup_input_event.hpp"
 #include <cassert>
 #include <iostream>
-bool admit=false,motion=false;bool gate(){return admit;}bool motionGate(){return motion;}
+bool admit=false,motion=false,startup=false;bool gate(){return admit;}bool motionGate(){return motion;}bool startupGate(){return startup;}
 int main(){
     using namespace passthrough;NativeSlotFilter filter;
     RAWINPUT input{};input.header.dwType=RIM_TYPEKEYBOARD;input.data.keyboard.VKey='2';input.data.keyboard.MakeCode=3;assert(filter.filter(input)&&input.data.keyboard.VKey==255&&input.data.keyboard.MakeCode==0);
@@ -17,7 +18,7 @@ int main(){
     assert(!filter.filter(input,false)&&!input.data.mouse.lLastX&&!input.data.mouse.lLastY&&input.data.mouse.usButtonFlags==RI_MOUSE_RIGHT_BUTTON_DOWN);
     constexpr unsigned releases[]{'W',VK_CONTROL,VK_LCONTROL,VK_RCONTROL,VK_SHIFT,VK_LSHIFT,VK_RSHIFT,VK_F6};
     for(unsigned key:releases){input={};input.header.dwType=RIM_TYPEKEYBOARD;input.data.keyboard.VKey=static_cast<USHORT>(key);input.data.keyboard.Flags=RI_KEY_BREAK;assert(!filter.filter(input,true)&&input.data.keyboard.VKey==key);}
-    auto library=LoadLibraryW(L"overwatch-2015/Overwatch Beta 0.8.0.24919/minhook.x64.dll");assert(library&&filter.start(gate,library,motionGate));
+    auto library=LoadLibraryW(L"overwatch-2015/Overwatch Beta 0.8.0.24919/minhook.x64.dll");assert(library&&filter.start(gate,library,motionGate,nullptr,startupGate));
     GetAsyncKeyState('2');assert(filter.keyQueries==0);admit=true;
     assert(GetAsyncKeyState('2')==0&&filter.keyQueries==1);GetAsyncKeyState('Q');assert(filter.keyQueries==1);
     MSG msg{};PeekMessageW(&msg,nullptr,0,0,PM_NOREMOVE);PostThreadMessageW(GetCurrentThreadId(),WM_KEYDOWN,'2',0);assert(PeekMessageW(&msg,nullptr,WM_KEYDOWN,WM_KEYDOWN,PM_REMOVE)&&msg.message==WM_NULL);
@@ -32,6 +33,19 @@ int main(){
     PostThreadMessageW(GetCurrentThreadId(),WM_KEYDOWN,VK_ESCAPE,0);assert(PeekMessageW(&msg,nullptr,WM_KEYDOWN,WM_KEYDOWN,PM_REMOVE)&&msg.message==WM_KEYDOWN&&msg.wParam==VK_ESCAPE);
     PostThreadMessageW(GetCurrentThreadId(),WM_RBUTTONDOWN,MK_RBUTTON,123);assert(PeekMessageW(&msg,nullptr,WM_RBUTTONDOWN,WM_RBUTTONDOWN,PM_REMOVE)&&msg.message==WM_RBUTTONDOWN&&msg.wParam==MK_RBUTTON);
     admit=false;PostThreadMessageW(GetCurrentThreadId(),WM_MOUSEMOVE,0,123);assert(PeekMessageW(&msg,nullptr,WM_MOUSEMOVE,WM_MOUSEMOVE,PM_REMOVE)&&msg.message==WM_MOUSEMOVE);
+    const auto name=startupInputEventName();assert(!name.empty()&&!startupInputEventExists(name));
+    auto event=CreateEventW(nullptr,TRUE,FALSE,name.c_str());assert(event&&startupInputEventExists(name));startup=true;
+    const auto queries=filter.keyQueries.load();assert(GetAsyncKeyState('H')==0&&GetKeyState(VK_LBUTTON)==0&&filter.keyQueries==queries+2);
+    BYTE state[256]{};assert(GetKeyboardState(state));for(BYTE key:state)assert(key==0);
+    for(UINT kind:{WM_KEYDOWN,WM_SYSKEYDOWN,WM_KEYUP,WM_CHAR,WM_LBUTTONDOWN,WM_RBUTTONUP,WM_MOUSEWHEEL}){
+        PostThreadMessageW(GetCurrentThreadId(),kind,VK_ESCAPE,0);
+        assert(PeekMessageW(&msg,nullptr,kind,kind,PM_REMOVE)&&msg.message==WM_NULL);
+    }
+    input={};input.header.dwType=RIM_TYPEMOUSE;input.data.mouse.usButtonFlags=RI_MOUSE_LEFT_BUTTON_DOWN;input.data.mouse.lLastX=29;
+    assert(filter.filter(input,false,true)&&input.data.mouse.usButtonFlags==0&&input.data.mouse.lLastX==0);
+    CloseHandle(event);assert(!startupInputEventExists(name));startup=false;
+    PostThreadMessageW(GetCurrentThreadId(),WM_LBUTTONDOWN,MK_LBUTTON,0);
+    assert(PeekMessageW(&msg,nullptr,WM_LBUTTONDOWN,WM_LBUTTONDOWN,PM_REMOVE)&&msg.message==WM_LBUTTONDOWN);
     assert(filter.stop()&&filter.restored&&!filter.enabled);
     std::cout<<"PASS: real MinHook input start/stop, message-pump filtering and byte restoration, scope exclusion, raw filtering preserves movement/fire\n";
 }

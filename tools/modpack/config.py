@@ -203,7 +203,7 @@ class PackPaths:
         return mode
 
     def auto_start(self) -> bool:
-        value = self.config.get('autoStart', True)
+        value = self.config.get('autoStart', False)
         if type(value) is not bool:
             raise ValueError('autoStart 必须是 true 或 false。')
         return value
