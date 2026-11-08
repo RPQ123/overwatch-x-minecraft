@@ -37,11 +37,13 @@ public final class NativeLocomotionController implements AutoCloseable {
             NativeRollController.INSTANCE.discardMotion();NativeMotorController.INSTANCE.discardMotion();
             p.setVelocity(Vec3d.ZERO);return Vec3d.ZERO;
         }
-        if(NativeDeadeyeController.movementLocked()){
+        if(NativeDeadeyeController.movementLocked()||RoadhogClient.breatherLocked()){
             NativeRollController.INSTANCE.discardMotion();NativeMotorController.INSTANCE.discardMotion();
             return new Vec3d(0,p.getAbilities().flying?0:vanilla.y,0);
         }
         if(p.getAbilities().flying||p.isTouchingWater()||p.isInLava()||p.hasVehicle()||p.isFallFlying())return vanilla;
+        var winstonMomentum=WinstonClient.INSTANCE.momentumMovement(client,vanilla);if(winstonMomentum!=null)return winstonMomentum;
+        var grappleMomentum=NativeGrappleController.INSTANCE.momentumMovement(client,vanilla);if(grappleMomentum!=null)return grappleMomentum;
         var roll=NativeRollController.INSTANCE.movement(vanilla);if(roll!=null)return roll;
         var motor=NativeMotorController.INSTANCE.movement(client,vanilla);if(motor!=null)return motor;
         return baseMovement(vanilla);

@@ -417,6 +417,85 @@ tasks.named('check') {
     dependsOn tasks.named('verifyTracerPulseFirstUse'), tasks.named('verifyRecallSoundBegin')
 }
 
+tasks.register('verifyTorbVisual', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.TorbVisualCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyTorbVisual') }
+
+tasks.register('verifyT3Presentation', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T3PresentationCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyT3Presentation') }
+
+tasks.register('verifyT4Pickup', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T4PickupCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyT4Pickup') }
+
+tasks.register('verifyT5Placement', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T5PlacementCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyT5Placement') }
+
+tasks.register('verifyRoadhog', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.RoadhogCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyRoadhog') }
+
+tasks.register('verifyWinston', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WinstonCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyWinston') }
+
+tasks.register('verifyWinstonHealthReader', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WinstonHealthReaderCheck'
+    onlyIf { System.getProperty('os.name').startsWith('Windows') }
+}
+tasks.named('check') { dependsOn tasks.named('verifyWinstonHealthReader') }
+
+tasks.register('verifyWinstonCast', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WinstonCastCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyWinstonCast') }
+
+tasks.register('verifyWinstonAudio', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WinstonAudioCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyWinstonAudio') }
+
+tasks.register('verifyWinstonAudioAssets', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.WinstonAudioAssetCheck'
+    args file('../private-assets/ow1-zhcn-2016/thnu-full').absolutePath,
+         file('../research/winston/W3/tmp').absolutePath
+}
+
+tasks.register('verifyAbilityCooldownClock', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.AbilityCooldownClockCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyAbilityCooldownClock') }
+
 ['verifyStartupCompilerBudget':false,'verifyStartupCompilerBudgetConflict':true].each { taskName, conflict ->
     tasks.register(taskName, JavaExec) {
         dependsOn tasks.named('testClasses')
@@ -433,3 +512,34 @@ tasks.named('check') {
     }
     tasks.named('check') { dependsOn tasks.named(taskName) }
 }
+
+// Thread T6: native lifecycle and original mesh path boundaries, offline only.
+tasks.register('verifyT6Behavior', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T6BehaviorCheck'
+}
+tasks.named('check') { dependsOn tasks.named('verifyT6Behavior') }
+
+// T7: offline visual lifetime/terrain and guarded nonblocking HP mirror.
+tasks.register('verifyT7Visual', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T7VisualCheck'
+}
+tasks.register('verifyT7HealthMirror', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T7HealthMirrorCheck'
+    args file('../research/fix/T7-lab/evidence/health-mirror-after.json').absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('verifyT7Visual'),tasks.named('verifyT7HealthMirror') }
+
+// T8: real vanilla/custom ModelPart head geometry and original UVs, offline.
+tasks.register('verifyT8Heads', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'lab.owmcguest.T8HeadModelCheck'
+    args file('../research/fix/T8-lab/evidence/entity-head-models.json').absolutePath
+}
+tasks.named('check') { dependsOn tasks.named('verifyT8Heads') }

@@ -14,11 +14,15 @@ public final class NativeShotSimulation {
     }
     public interface WorldAccess {
         Hit trace(Vec start,Vec end);
+        default Hit trace(Shot shot,Vec start,Vec end){return trace(start,end);}
         default Vec aim(Shot shot){return shot.velocity();}
         /** Presentation follows the same swept segment; it never supplies damage. */
         default void present(Shot shot,Vec start,Vec end,Hit hit) {}
+        default void present(Shot shot,Vec start,Vec end,Hit hit,double begin,double finish){present(shot,start,end,hit);}
         /** One resolved contact after retirement, independent of presentation. */
         default void impact(Shot shot,Hit hit) {}
+        /** Only a completed expiry split owns this single second-stage cue. */
+        default void split(Shot parent,Vec at) {}
         default java.util.List<Hit> beam(Vec start,Vec direction,double range){throw new UnsupportedOperationException("native beam collision unavailable");}
         double damage(Hit hit,double minecraftHp,long nativeEntity);
         default double beamDamage(Hit hit,double minecraftHp){return damage(hit,minecraftHp,0);}
@@ -35,12 +39,14 @@ public final class NativeShotSimulation {
     private java.util.List<Shot> admissions=java.util.List.of();
     public java.util.List<Shot> admissions(){return admissions;}
     private long cursor;
+    private long derivedId=-1;
+    public long roadhogSplits,roadhogDerivedPellets;
     public long admitted,rejected,duplicates,blockHits,entityHits,expired,explosions;
     public double damageApplied;
     public String lastRejection="";
     public long admit(Batch batch){
         var fresh=new ArrayList<Shot>();admissions=java.util.List.of();
-        if(!batch.source().equals(source)){flights.clear();seen.clear();source=batch.source();cursor=batch.acknowledged();}
+        if(!batch.source().equals(source)){flights.clear();seen.clear();derivedId=-1;source=batch.source();cursor=batch.acknowledged();}
         if(batch.acknowledged()>cursor)throw new IllegalArgumentException("source acknowledged an unprocessed prefix");
         for(var entry:batch.entries()){
             if(entry.id()<=cursor){duplicates++;continue;}
@@ -74,8 +80,10 @@ public final class NativeShotSimulation {
             if(!flight.shot.hitscan()&&elapsed<=flight.elapsed)continue;
             var direction=flight.shot.hitscan()?world.aim(flight.shot):flight.shot.velocity();
             var end=flight.shot.start().add(direction.multiply(flight.shot.hitscan()?flight.shot.range():elapsed));
-            var hit=world.trace(flight.position,end);
-            world.present(flight.shot,flight.position,hit==null?end:hit.point(),hit);
+            var hit=world.trace(flight.shot,flight.position,end);
+            var visibleEnd=hit==null?end:hit.point();double full=Math.sqrt(end.subtract(flight.position).lengthSquared());
+            double fraction=hit==null||full<1e-9?1:Math.min(1,Math.sqrt(visibleEnd.subtract(flight.position).lengthSquared())/full);
+            world.present(flight.shot,flight.position,visibleEnd,hit,flight.elapsed,flight.elapsed+(elapsed-flight.elapsed)*fraction);
             if(hit!=null){
                 flights.remove(flight.shot.id()); // Resolve before an external callback; never retry a hit.
                 world.impact(flight.shot,hit);
@@ -99,7 +107,9 @@ public final class NativeShotSimulation {
             if(f.distance+segment>shot.range()){
                 end=f.position.add(end.subtract(f.position).multiply(Math.max(0,shot.range()-f.distance)/Math.max(1e-9,segment)));segment=shot.range()-f.distance;
             }
-            var hit=world.trace(f.position,end);world.present(shot,f.position,hit==null?end:hit.point(),hit);f.elapsed+=dt;f.distance+=segment;
+            var hit=world.trace(shot,f.position,end);var visibleEnd=hit==null?end:hit.point();
+            double fraction=hit==null||segment<1e-9?1:Math.min(1,Math.sqrt(visibleEnd.subtract(f.position).lengthSquared())/segment);
+            world.present(shot,f.position,visibleEnd,hit,f.elapsed,f.elapsed+dt*fraction);f.elapsed+=dt;f.distance+=segment;
             f.velocity=f.velocity.add(new Vec(0,-effect.gravity()*dt,0));
             if(hit!=null){
                 if(hit.block())blockHits++;else entityHits++;
@@ -123,6 +133,15 @@ public final class NativeShotSimulation {
         }
         if(flights.containsKey(shot.id())&&f.elapsed>=duration-1e-7){
             flights.remove(shot.id());expired++;
+            if(RoadhogRules.secondary(shot)){
+                // Expiry of ONE acknowledged native parent authorizes ONE
+                // declared MC child volley. A collision never reaches this path.
+                if(flights.size()+RoadhogRules.SPLIT_COUNT<=512){
+                    for(var child:RoadhogRules.split(shot,f.position,derivedId))flights.put(child.id(),new Flight(child));
+                    derivedId-=RoadhogRules.SPLIT_COUNT;roadhogSplits++;roadhogDerivedPellets+=RoadhogRules.SPLIT_COUNT;
+                    world.split(shot,f.position);
+                }else{rejected++;lastRejection="Roadhog split capacity";}
+            }
             if(effect.fuse()>0&&effect.splash()>0){explosions++;damageApplied+=world.armoryExplosion(shot,new Hit(true,0,f.position));}
         }
     }
@@ -131,5 +150,5 @@ public final class NativeShotSimulation {
     public java.util.List<Shot> activeProjectiles(){
         return flights.values().stream().map(f->f.shot).filter(s->!s.hitscan()&&!s.beam()).toList();
     }
-    public void clear(){flights.clear();seen.clear();admissions=java.util.List.of();source=null;cursor=0;lastRejection="";}
+    public void clear(){flights.clear();seen.clear();derivedId=-1;admissions=java.util.List.of();source=null;cursor=0;lastRejection="";}
 }

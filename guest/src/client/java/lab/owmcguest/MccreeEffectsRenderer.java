@@ -52,7 +52,7 @@ final class MccreeEffectsRenderer {
         var grenades=NativeCombatRuntime.flashbangView;boolean grenadeDrew=false;
         if(grenades!=null&&grenades.world()==world&&grenades.player().equals(client.player.getUuid())&&grenades.source().pid()==host.pid()&&grenades.source().hostGeneration()==host.generation())for(var shot:grenades.shots()){
             double age=(now-shot.wallMs())/1000.;if(age<0||age>.27)continue;
-            var at=new Vec3d(shot.start().x()+shot.velocity().x()*age,shot.start().y()+shot.velocity().y()*age-10*age*age,shot.start().z()+shot.velocity().z()*age);
+            var at=NativeMuzzleOrigins.at(shot.identity(),new Vec3d(shot.start().x()+shot.velocity().x()*age,shot.start().y()+shot.velocity().y()*age-10*age*age,shot.start().z()+shot.velocity().z()*age));
             if(!client.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
             var axis=new org.joml.Vector3f(0,1,0).rotate(new Quaternionf().rotationXYZ((float)(age*11),0,(float)(age*6)));
             grenadeDrew|=OriginalWorldRenderer.mesh(ctx,"mccree-flashbang",at,new Vec3d(axis.x,axis.y,axis.z),false,1,1,1,1);

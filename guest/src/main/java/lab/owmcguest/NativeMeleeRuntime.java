@@ -23,7 +23,7 @@ public final class NativeMeleeRuntime {
     public static volatile double damageApplied;
     public static volatile String status="{\"accepted\":0,\"hits\":0,\"damageApplied\":0.0,\"blocked\":0,\"rejected\":0}";
 
-    public static boolean supported(long hero){return (hero&~0xffffL)==0x02e0000000000000L&&java.util.Set.of(2L,3L,5L,6L,8L,9L,10L,0x15L,0x29L,0x42L,0x65L,0x6eL,0xddL).contains(hero&0xffffL);}
+    public static boolean supported(long hero){return (hero&~0xffffL)==0x02e0000000000000L&&java.util.Set.of(2L,3L,5L,6L,8L,9L,10L,0x15L,0x29L,0x40L,0x42L,0x65L,0x6eL,0xddL).contains(hero&0xffffL);}
     private static String heroName(long hero){return hero==GENJI?"genji":hero==MCCREE?"mccree":hero==WINSTON?"winston":"unknown";}
 
     public static void swing(MinecraftServer server,UUID playerId,long expectedWorld,long sourceGeneration,long hero,long model,long tick,long wallMs,Vec3d eye,Vec3d center,double nativeDamage,double radius){
@@ -31,6 +31,7 @@ public final class NativeMeleeRuntime {
         if(player==null||!player.isAlive()||NativeWorldIdentity.of(server,player.getWorld().getRegistryKey())!=expectedWorld||sourceGeneration==0||!supported(hero)||eye==null||center==null||!Double.isFinite(nativeDamage)||nativeDamage<=0||nativeDamage>1000||radius!=1||tick<=0||now-wallMs>200||wallMs>now+50
             ||!NativeEliminationRuntime.sessionMatches(playerId,expectedWorld,hero,model,sourceGeneration)){rejected++;publish(hero);return;}
         if(player.getEyePos().squaredDistanceTo(eye)>16||!Double.isFinite(center.lengthSquared())||center.squaredDistanceTo(eye)>16){rejected++;publish(hero);return;}
+        if(hero==WINSTON&&WinstonServer.INSTANCE.primal(playerId,expectedWorld,sourceGeneration,model))return;
         String identity=sourceGeneration+":"+model+":"+tick;if(!seen.add(identity))return;if(seen.size()>4096)seen.remove(seen.iterator().next());accepted++;
         var world=player.getServerWorld();net.minecraft.entity.Entity best=null;double nearest=Double.POSITIVE_INFINITY;
         for(var entity:NativeDamageTargets.in(world,player,new Box(center,center).expand(radius))){

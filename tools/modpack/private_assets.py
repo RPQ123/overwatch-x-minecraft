@@ -96,7 +96,8 @@ def prebuild_profile_resources(builder) -> dict:
     pack('owmc-private-pharah-barrage','法老之鹰语音','pack_pharah_barrage',[
         ('pharah.barrage.fire',barrage,'private/pharah/fire-loop',builder.rows.get(barrage,{}).get('sha256',''))])
     manifest=local_path(root,VOICE_DIRECTORY+'/manifest.json')
-    full_entries=read_json(manifest).get('entries',{}) if manifest.is_file() else {}
+    full_manifest=read_json(manifest) if manifest.is_file() else {}
+    full_entries=full_manifest.get('entries',{})
     full_rows=[('hero_voice.'+identity,VOICE_DIRECTORY+'/'+entry['file'],'private/full/'+identity,entry['sha256'])
                for identity,entry in sorted(full_entries.items()) if not entry.get('unavailable')]
     full_ready=pack('owmc-private-full-voice','完整英雄语音','heroVoiceAssets',full_rows,full=True)
@@ -106,8 +107,9 @@ def prebuild_profile_resources(builder) -> dict:
             receipt=PROFILE_DIRECTORY+'/resourcepacks/owmc-private-full-voice/assets/owmcguest/sounds/private/full/'+identity+'.json'
             json_file(receipt,dict(sourceSha256=entry.get('originalMp3Sha256',entry['sha256']),oggSha256=entry['sha256']))
         inputs[VOICE_DIRECTORY+'/manifest.json']={k:builder.rows[VOICE_DIRECTORY+'/manifest.json'][k] for k in ('path','bytes','sha256')}
-        if len(full_rows)!=785:
-            statuses[-1].update(ready=False,warning=f'完整英雄语音仅预制 {len(full_rows)}/785 条；缺项保留告警。')
+        expected=full_manifest['allowedCatalogCount']
+        if len(full_rows)!=expected:
+            statuses[-1].update(ready=False,warning=f'完整英雄语音仅预制 {len(full_rows)}/{expected} 条；缺项保留告警。')
     else:
         statuses.append(dict(component='heroVoiceAssets',label='完整英雄语音',ready=False,warning='完整英雄语音缺失；继续启动。'))
     # Verify these sources too before bypassing the ordinary optional preparers.
@@ -163,10 +165,29 @@ def prepared_profile_resources(profile: Path) -> bool:
 
 
 def voice_catalog(root: Path) -> list[tuple[str, str, str]]:
-    text = (root/'guest/src/main/java/lab/owmcguest/HeroVoiceDefaultCatalog.java').read_text(encoding='utf-8')
-    rows = re.findall(r'^([a-z0-9]+)\|([a-z_:]+)\|([0-9a-f]{32})$', text, re.M)
-    if len(rows) != 785 or len({h for _, _, h in rows}) != 785:
-        raise ValueError('语音白名单必须恰为 785 个不重复条目。')
+    source = root/'guest/src/main/java/lab/owmcguest'
+    defaults = (source/'HeroVoiceDefaultCatalog.java').read_text(encoding='utf-8')
+    winston = (source/'WinstonAudioCatalog.java').read_text(encoding='utf-8')
+    roadhog = (source/'RoadhogSoundCatalog.java').read_text(encoding='utf-8')
+    default_block = re.search(r'\bDATA\s*=\s*"""\s*(.*?)\s*"""', defaults, re.S)
+    winston_block = re.search(r'\bSFX\s*=\s*Map\.of\((.*?)\);', winston, re.S)
+    roadhog_event = re.search(r'\bEVENT\s*=\s*"(sfx:[a-z_]+)";', roadhog)
+    roadhog_hash = re.search(r'\bHASH\s*=\s*"([0-9a-f]{32})";', roadhog)
+    if not (default_block and winston_block and roadhog_event and roadhog_hash):
+        raise ValueError('无法读取英雄语音与原版音效白名单。')
+    rows = []
+    for line in default_block[1].splitlines():
+        match = re.fullmatch(r'([a-z0-9]+)\|([a-z_]+(?::[a-z_]+)?)\|([0-9a-f]{32})', line.strip())
+        if not match:
+            raise ValueError('默认语音白名单有无效条目。')
+        rows.append(match.groups())
+    winston_events = re.findall(r'"(sfx:[a-z_]+)"\s*,\s*"([0-9a-f]{32})"', winston_block[1])
+    if not rows or not winston_events or len(winston_events) * 2 != len(winston_block[1].split(',')):
+        raise ValueError('默认语音或温斯顿原版音效白名单不完整。')
+    rows.extend(('winston', event, identity) for event, identity in winston_events)
+    rows.append(('roadhog', roadhog_event[1], roadhog_hash[1]))
+    if len({identity for _, _, identity in rows}) != len(rows):
+        raise ValueError('语音白名单含重复资源标识。')
     return rows
 
 
@@ -180,7 +201,10 @@ def model_references(root: Path, available: set[str]) -> set[str]:
     selected = available & literals
     selected |= {name for name in available if any(name[:i] in literals and name[i:] in literals
                                                   for i in range(1, len(name)))}
-    selected |= set(re.findall(r'OriginalMeshPack\.get\("([a-z0-9-]+)"\)', texts))
+    selected |= set(re.findall(r'OriginalMeshPack\.get\(\s*"([a-z0-9-]+)"\s*\)', texts))
+    npc_catalog = root/'guest/src/main/java/lab/owmcguest/HeroNpcCatalog.java'
+    if npc_catalog.is_file():
+        selected |= {'hero-npc-'+hero for hero in re.findall(r'\bnew Entry\("([a-z0-9]+)"', npc_catalog.read_text(encoding='utf-8'))}
     # The turret's native level is bounded 1..3 by the server. The renderer
     # builds its name from that integer, so it is not a full string literal.
     if '"torb-turret-"+tv.level()' in texts:
@@ -191,7 +215,7 @@ def model_references(root: Path, available: set[str]) -> set[str]:
 class PrivateBundle:
     def __init__(self, builder, configured: PackPaths):
         self.builder, self.paths = builder, configured
-        self.summary = dict(voiceCatalog=785, voiceClipsCopied=0, modelPacksCopied=0,
+        self.summary = dict(voiceCatalog=0, voiceClipsCopied=0, modelPacksCopied=0,
                             meshPacksCopied=0, specialModelPacksCopied=0, legacyAudioFiles=0,
                             ffmpegIncluded=False, runtimeTranscodingRequired=False,
                             buildConvertedVoices=0,
@@ -231,6 +255,7 @@ class PrivateBundle:
         self.builder.record(relative, COMPONENT)
 
     def voices(self, catalog: list[tuple[str,str,str]]) -> None:
+        self.summary['voiceCatalog'] = len(catalog)
         root = self.paths.get('heroVoiceAssets')
         manifest = read_json(root/'manifest.json')
         entries = manifest.get('entries', manifest)
@@ -244,20 +269,38 @@ class PrivateBundle:
             try:
                 if entry.get('hero') != hero or entry.get('event') != event or not re.fullmatch('[0-9a-f]{64}', pin):
                     raise ValueError('白名单与私有清单身份不同')
-                # Reuse only hash-receipted OGGs for the exact pinned MP3 input.
-                # This avoids copying raw MP3s or shipping a runtime converter.
-                try:
-                    ogg = cached/(identity+'.ogg')
-                    proof = read_json(cached/(identity+'.json'))
-                    if proof.get('sourceSha256') != pin or sha256(ogg) != proof.get('oggSha256'):
-                        raise ValueError('OGG 缓存回执不匹配')
-                    if not 0<ogg.stat().st_size<=5_000_000 or not ogg.read_bytes().startswith(b'OggS'):
-                        raise ValueError('OGG 头不匹配')
-                    self.copy(ogg, VOICE_DIRECTORY+'/'+row['file'], cached)
-                    ogg_sha=proof['oggSha256']
-                except (OSError,ValueError,KeyError,TypeError):
-                    ogg_sha=self.convert_voice(root,hero,identity,pin,VOICE_DIRECTORY+'/'+row['file'])
-                row.update(sha256=ogg_sha, originalMp3Sha256=pin)
+                destination = VOICE_DIRECTORY+'/'+row['file']
+                original_pin = entry.get('originalMp3Sha256', pin)
+                if not re.fullmatch('[0-9a-f]{64}', original_pin):
+                    raise ValueError('原始语音 SHA256 无效')
+                format_name = entry.get('format', 'mp3')
+                if format_name == 'ogg':
+                    ogg = local_path(root, entry['file'])
+                    if (not 0 < ogg.stat().st_size <= 5_000_000 or sha256(ogg) != pin
+                            or not ogg.read_bytes().startswith(b'OggS')):
+                        raise ValueError('语音 OGG 哈希、大小或文件头不匹配')
+                    self.copy(ogg, destination, root)
+                    ogg_sha = pin
+                elif format_name == 'mp3':
+                    # Reuse only OGGs receipted against the exact MP3 input.
+                    try:
+                        ogg = cached/(identity+'.ogg')
+                        proof = read_json(cached/(identity+'.json'))
+                        if proof.get('sourceSha256') != pin or sha256(ogg) != proof.get('oggSha256'):
+                            raise ValueError('OGG 缓存回执不匹配')
+                        if not 0<ogg.stat().st_size<=5_000_000 or not ogg.read_bytes().startswith(b'OggS'):
+                            raise ValueError('OGG 头不匹配')
+                        self.copy(ogg, destination, cached)
+                        ogg_sha=proof['oggSha256']
+                    except (OSError,ValueError,KeyError,TypeError):
+                        ogg_sha=self.convert_voice(root,hero,identity,pin,destination)
+                else:
+                    raise ValueError('未知语音格式')
+                row['sha256'] = ogg_sha
+                if format_name == 'mp3' or 'originalMp3Sha256' in entry:
+                    row['originalMp3Sha256'] = original_pin
+                if 'variant' in entry:
+                    row['variant'] = entry['variant']
                 self.summary['voiceClipsCopied'] += 1
             except (OSError,ValueError,KeyError,TypeError,subprocess.SubprocessError) as error:
                 # Keep an absent entry so Java reports incomplete assets rather
@@ -304,9 +347,31 @@ class PrivateBundle:
                 sources.append((path, relative))
             # Validate the complete group before copying; partial models remain
             # absent and follow the existing renderers' graceful fallback.
+            redacted = {}
             for path, relative in sources:
-                self.copy(path, destination+'/'+relative, folder)
-            self.copy(folder/'provenance.json', destination+'/provenance.json', folder)
+                output = destination+'/'+relative
+                self.copy(path, output, folder)
+                if name == 'winston-barrier-w5' and relative == 'pack.json':
+                    packed = local_path(self.builder.destination,output)
+                    mesh_data = read_json(packed)
+                    style = mesh_data.get('winstonBarrierStyle',{})
+                    private_root = PureWindowsPath(style.get('privateRoot',''))
+                    if private_root.is_absolute():
+                        style['privateRoot'] = 'local-input:'+private_root.name
+                        write_json(packed,mesh_data)
+                        self.builder.record(output,COMPONENT)
+                        redacted[relative] = pins[relative]
+                        self.summary['absoluteSourcePathsRedacted'] += 1
+            provenance = destination+'/provenance.json'
+            self.copy(folder/'provenance.json', provenance, folder)
+            if redacted:
+                packed = local_path(self.builder.destination,provenance)
+                packed_proof = read_json(packed)
+                packed_proof['originalFileSha256'] = redacted
+                for relative in redacted:
+                    packed_proof['files'][relative] = self.builder.rows[destination+'/'+relative]['sha256']
+                write_json(packed,packed_proof)
+                self.builder.record(provenance,COMPONENT)
             self.summary['modelPacksCopied'] += 1
             self.summary['meshPacksCopied' if mesh else 'specialModelPacksCopied'] += 1
         except (OSError,ValueError,KeyError,TypeError) as error:
@@ -318,7 +383,8 @@ class PrivateBundle:
             available = {p.name for p in root.iterdir() if p.is_dir()}
         except OSError:
             available = set()
-        selected = model_references(self.builder.root, available)
+        # The package explicitly preserves the existing soul-orb fallback.
+        selected = model_references(self.builder.root, available) | {'reaper-soul'}
         self.summary['meshPacksReferenced'] = len(selected)
         for name in sorted(selected):
             self.model(name, root/name, 'private-assets/owmc-mesh/'+name, mesh=True)
@@ -327,7 +393,7 @@ class PrivateBundle:
 
     def legacy_audio(self) -> None:
         # These are additional, explicitly referenced startup sounds/effects,
-        # not extra rows added to the approved 785-entry hero voice catalog.
+        # not extra rows added to the approved hero voice catalog.
         import genji_voice_assets as genji
         import mccree_voice_assets as mccree
         import combat_feedback_assets as feedback
@@ -367,6 +433,10 @@ class PrivateBundle:
         self.voices(voice_catalog(self.builder.root))
         self.models()
         self.legacy_audio()
+        issues = [row.get('hash') or row.get('name') or row['file'] for key in
+                  ('missingVoices', 'missingModels', 'optionalAudioWarnings') for row in self.summary[key]]
+        if issues:
+            raise ValueError(f'完整包缺少或无法验证 {len(issues)} 项私有资源：'+', '.join(issues))
         self.ffmpeg()
         self.summary['audioFiles']=sum(r['component']==COMPONENT and r['path'].endswith('.ogg') for r in self.builder.rows.values())
         self.summary['legacyAudioFiles']=self.summary['audioFiles']-self.summary['voiceClipsCopied']

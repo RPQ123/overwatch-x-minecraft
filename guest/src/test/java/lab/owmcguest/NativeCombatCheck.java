@@ -24,6 +24,7 @@ public final class NativeCombatCheck {
             .replace("\"damage\":7","\"damage\":125").replace("\"gravity\":0","\"gravity\":9.800000190734863");
         var batch=NativeShotProtocol.decode(sonic,expected,1000);
         check(batch.entries().getFirst().shot()!=null,"Actual calibrated strong Sonic protocol");
+        check(NativeShotProtocol.decode(sonic.replace("\"probeVersion\":16","\"probeVersion\":17"),expected,1000).entries().getFirst().shot()!=null,"Shared emission17 preserves calibrated Sonic");
         String weak=sonic.replace("400000000000149","40000000000020d").replace("[0,0,90]","[0,0,25]").replace("\"damage\":125","\"damage\":25");
         check(NativeShotProtocol.decode(weak,expected,1000).entries().getFirst().shot()!=null,"Calibrated weak Sonic protocol");
         for(String bad:new String[]{sonic.replace("\"probeVersion\":16","\"probeVersion\":15"),sonic.replace("\"gravity\":9.800000190734863","\"gravity\":0"),
@@ -57,6 +58,7 @@ public final class NativeCombatCheck {
             .replace("\"outerScale\":0.125","\"outerScale\":0.30000001192092896").replace("\"effect\":0","\"effect\":1");
         var tankBatch=NativeShotProtocol.decode(tankJson,expected,1000);var tank=tankBatch.entries().getFirst().shot();
         check(tank!=null&&tank.tankShell()&&!tank.rocket()&&!tank.helix()&&!tank.barrage(),"Only calibrated beta Tank03ce gets its dedicated MC presentation");
+        check(NativeShotProtocol.decode(tankJson.replace("\"probeVersion\":16","\"probeVersion\":17"),expected,1000).entries().getFirst().shot()!=null,"Shared emission17 preserves calibrated Tank");
         check(NativeShotProtocol.decode(tankJson,new Expected(1,2,4,3,-1,1.62,8,0x02e0000000000015L),1000).entries().getFirst().shot()!=null,"Tank receipt agrees with current model and hero");
         for(String invalid:new String[]{tankJson.replace("\"probeVersion\":16","\"probeVersion\":15"),tankJson.replace("\"factoryType\":1","\"factoryType\":2"),tankJson.replace("\"status\":8","\"status\":0"),
             tankJson.replace("[0,0,60]","[0,0,50]"),tankJson.replace("\"damage\":50","\"damage\":500"),tankJson.replace("\"splashDamage\":140","\"splashDamage\":80"),

@@ -85,7 +85,8 @@ final class HeroVoiceAssets implements AutoCloseable {
                     String hero=o.get("hero").getAsString(),event=o.get("event").getAsString();
                     if(hero.equals("hanzo"))requireHanzo=true;
                     // 语音挂接：在读MP3/转换/注册前拒绝无字幕、旧可选与未知素材。
-                    if(!HeroVoicePolicy.clipAllowed(hero,event,hash)||!HeroVoiceDefaultCatalog.allowed(hero,event,hash)){excluded.merge(event,1,Integer::sum);continue;}
+                    boolean certifiedSfx=WinstonAudioCatalog.allowed(hero,event,hash)||RoadhogSoundCatalog.allowed(hero,event,hash);
+                    if(!certifiedSfx&&(!HeroVoicePolicy.clipAllowed(hero,event,hash)||!HeroVoiceDefaultCatalog.allowed(hero,event,hash))){excluded.merge(event,1,Integer::sum);continue;}
                     String pin=o.get("sha256").getAsString().toLowerCase(Locale.ROOT);
                     if(!hash.matches("[0-9a-f]{32}")||!HEROES.contains(hero)||!pin.matches("[0-9a-f]{64}")||!event.matches("[a-z_]+(?::[a-z_]+)?"))throw new IllegalArgumentException("invalid entry identity");
                     boolean directOgg=o.has("format")&&o.get("format").getAsString().equals("ogg");
@@ -132,6 +133,12 @@ final class HeroVoiceAssets implements AutoCloseable {
             for(String hero:List.of("bastion","junkrat","zenyatta"))if(clips.stream().noneMatch(c->c.hero().equals(hero)&&c.event().equals("ult_cast"))){
                 missing++;if(errors.size()<4)errors.add("缺少"+hero+" ult_cast恢复素材");
             }
+            for(String event:WinstonAudioCatalog.VOICES)if(clips.stream().noneMatch(c->c.hero().equals("winston")&&c.event().equals(event))){
+                missing++;if(errors.size()<4)errors.add("缺少温斯顿台词 "+event+"；运行 prepare_winston_audio.py --apply-private");
+            }
+            for(var entry:WinstonAudioCatalog.SFX.entrySet())if(clips.stream().noneMatch(c->WinstonAudioCatalog.allowed(c.hero(),c.event(),c.hash())&&c.event().equals(entry.getKey()))){
+                missing++;if(errors.size()<4)errors.add("缺少温斯顿原版音效 "+entry.getKey()+"；运行 prepare_winston_audio.py --apply-private");
+            }
             var metadata=new JsonObject();var info=new JsonObject();info.addProperty("pack_format",34);info.addProperty("description","Private OWMC hero voices; local manifest only");metadata.add("pack",info);
             changed|=atomic(pack.resolve("pack.mcmeta"),metadata.toString());
             changed|=atomic(pack.resolve("assets/owmcguest/sounds.json"),definitions.toString());
@@ -166,15 +173,24 @@ final class HeroVoiceAssets implements AutoCloseable {
         }finally{Files.deleteIfExists(input);Files.deleteIfExists(output);Files.deleteIfExists(log);}
     }
     static long durationMs(byte[] ogg){
-        long samples=-1;
+        long samples=-1;int rate=0;
         for(int at=0;at+27<=ogg.length;){
             if(ogg[at]!='O'||ogg[at+1]!='g'||ogg[at+2]!='g'||ogg[at+3]!='S')throw new IllegalArgumentException("invalid OGG page");
             long granule=ByteBuffer.wrap(ogg,at+6,8).order(ByteOrder.LITTLE_ENDIAN).getLong();if(granule>=0)samples=granule;
             int segments=ogg[at+26]&255;if(at+27+segments>ogg.length)throw new IllegalArgumentException("truncated OGG");
             int length=27+segments;for(int i=0;i<segments;i++)length+=ogg[at+27+i]&255;
-            if(at+length>ogg.length)throw new IllegalArgumentException("truncated OGG payload");at+=length;
+            if(at+length>ogg.length)throw new IllegalArgumentException("truncated OGG payload");
+            if(at==0){
+                int body=27+segments;
+                if(segments==0||(ogg[27]&255)<30||body+30>ogg.length||ogg[body]!=1
+                    ||!new String(ogg,body+1,6,java.nio.charset.StandardCharsets.US_ASCII).equals("vorbis"))throw new IllegalArgumentException("Vorbis identity header");
+                int channels=ogg[body+11]&255;rate=ByteBuffer.wrap(ogg,body+12,4).order(ByteOrder.LITTLE_ENDIAN).getInt();
+                if(channels<1||channels>2||rate<8000||rate>96000)throw new IllegalArgumentException("Vorbis channels/sample rate");
+            }
+            at+=length;
         }
-        long duration=samples*1000/24000;
+        if(rate==0||samples<=0||samples>rate*30L)throw new IllegalArgumentException("voice duration bounds");
+        long duration=samples*1000/rate;
         if(duration<50||duration>30000)throw new IllegalArgumentException("voice duration bounds");return duration;
     }
     private static String sha(byte[] bytes)throws Exception{return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));}

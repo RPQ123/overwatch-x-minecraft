@@ -54,7 +54,7 @@ int main(int argc,char** argv){
     put(modelScene,8,modelPtr);put(modelScene,0x10,uint8_t(1));
     put(context,8,modelPtr);put(context,0x28,uint64_t(0x04000000000007ca));put(context,0x60,42.f);put(context,0x64,43.f);put(context,0x68,44.f);put(context,0x78,1.f);
     auto library=LoadLibraryW(L"overwatch-2015/Overwatch Beta 0.8.0.24919/minhook.x64.dll");assert(library);
-    auto dll=LoadLibraryA(argc==2?argv[1]:"native-host/build/owmc-native-emission-v16.dll");assert(dll);
+    auto dll=LoadLibraryA(argc==2?argv[1]:"native-host/build/owmc-native-emission-v17.dll");assert(dll);
     union{FARPROC raw;BOOL(*value)(uintptr_t,uintptr_t,HMODULE,uintptr_t);} attach{GetProcAddress(dll,"OWMC_EmissionTestAttach")};
     union{FARPROC raw;BOOL(*value)();} stop{GetProcAddress(dll,"OWMC_EmissionTestStop")};assert(attach.raw&&stop.raw);
     union{FARPROC raw;BOOL(*value)();} rebind{GetProcAddress(dll,"OWMC_EmissionTestRebind")};assert(rebind.raw);

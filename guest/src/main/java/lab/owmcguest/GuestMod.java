@@ -11,6 +11,7 @@ public final class GuestMod implements ModInitializer {
     public static volatile BlockPos proofBlock;
     @Override public void onInitialize() {
         CombatParticles.register();
+        TemporaryIceWallBlock.register();
         WidowSpiderEntity.register();
         SummonedMobLifecycle.register();
         if(Boolean.getBoolean("owmc.dayNightCycle") && !Boolean.getBoolean("owmc.frameExport")) {
@@ -18,6 +19,7 @@ public final class GuestMod implements ModInitializer {
             net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(NativeWorldSettings::tick);
         }
         if(Boolean.getBoolean("owmc.frameExport")) {
+            NativePickupDrops.init();
             HeroVoiceRuntime.register(); // 语音挂接：独立MC权威事件，不消费源氏击杀重置队列。
             ServerLifecycleEvents.SERVER_STARTED.register(PortalCatalog::refresh);
             ServerTickEvents.END_SERVER_TICK.register(TwilightForestTrial::tick);
@@ -53,17 +55,20 @@ public final class GuestMod implements ModInitializer {
             ServerTickEvents.END_SERVER_TICK.register(NativeVenomRuntime::tick);
             ServerTickEvents.END_SERVER_TICK.register(NativeBlizzardRuntime::tick);
             ServerTickEvents.END_SERVER_TICK.register(NativeIceWallRuntime::tick);
+            ServerTickEvents.END_SERVER_TICK.register(PlacementCooldowns::tick);
             ServerTickEvents.END_SERVER_TICK.register(NativeJunkratRuntime::tick);
             ServerTickEvents.END_SERVER_TICK.register(NativeHanzoSkillRuntime::tick);
             ServerTickEvents.END_SERVER_TICK.register(NativeTorbjornRuntime::tick);
             ServerTickEvents.END_SERVER_TICK.register(HeroServerModules::tick);
+            ServerTickEvents.END_SERVER_TICK.register(RHAcceptanceLab::tick);
+            ServerLifecycleEvents.SERVER_STOPPING.register(server->RHAcceptanceLab.close());
             ServerTickEvents.END_SERVER_TICK.register(NativeSoulRuntime::tick);
-            net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity,source,amount)->{NativeDeflectRuntime.beforeDamage(entity,source);return !NativeSustainRuntime.protects(entity)&&!NativeRecallRuntime.protects(entity)&&!NativeWraithRuntime.protects(entity);});
+            net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.ALLOW_DAMAGE.register((entity,source,amount)->{if(OverwatchFallImmunity.immune(entity,source))return false;NativeDeflectRuntime.beforeDamage(entity,source);return !NativeSustainRuntime.protects(entity)&&!NativeRecallRuntime.protects(entity)&&!NativeWraithRuntime.protects(entity);});
             net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DAMAGE.register((entity,source,base,damage,blocked)->NativeDeflectRuntime.afterDamage(entity,source));
             net.fabricmc.fabric.api.entity.event.v1.ServerLivingEntityEvents.AFTER_DEATH.register(NativeDeflectRuntime::afterDamage);
             net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents.END_SERVER_TICK.register(VillageWorldSetup::tick);
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeDashRuntime.close());
-            ServerLifecycleEvents.SERVER_STOPPING.register(server->NativeCombatRuntime.close());
+        ServerLifecycleEvents.SERVER_STOPPING.register(server->{TorbArmorGrowthRuntime.close();NativeCombatRuntime.close();});
             ServerLifecycleEvents.SERVER_STOPPING.register(server->NativeCombatFeedback.resetSession());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeMeleeRuntime.close());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativePortalRuntime.close());
@@ -78,6 +83,7 @@ public final class GuestMod implements ModInitializer {
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeVenomRuntime.clear());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeBlizzardRuntime.clear());
             ServerLifecycleEvents.SERVER_STOPPING.register(server->NativeIceWallRuntime.clear());  // 世界保存前移除屏障，避免残留进存档
+            ServerLifecycleEvents.SERVER_STOPPING.register(server->PlacementCooldowns.reset());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeIceWallRuntime.clear());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeJunkratRuntime.clear());
             ServerLifecycleEvents.SERVER_STOPPED.register(server->NativeHanzoSkillRuntime.clear());

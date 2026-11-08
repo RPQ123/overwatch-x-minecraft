@@ -71,7 +71,7 @@ final class PharahBarrageRenderer {
         var bodyLayer=RenderLayer.getEntityCutoutNoCull(TEXTURES.get("body"));var trailLayer=RenderLayer.getEyes(TEXTURES.get("trail"));var flameLayer=RenderLayer.getEyes(TEXTURES.get("flame"));var glowLayer=RenderLayer.getEyes(TEXTURES.get("glow"));var flareLayer=RenderLayer.getEyes(TEXTURES.get("flare"));
         if(flights!=null&&flights.source().equals(view.source())&&flights.world()==view.world()&&flights.model()==view.model()&&flights.player().equals(view.player()))for(var shot:flights.shots()){
             if(!shot.barrage())continue;double age=(now-shot.wallMs())/1000.;if(age<0||age>shot.lifetime())continue;
-            var at=vec(PharahBarrageMotion.position(shot,age));if(!c.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
+            var at=NativeMuzzleOrigins.at(shot.identity(),vec(PharahBarrageMotion.position(shot,age)));if(!c.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
             var direction=vec(PharahBarrageMotion.direction(shot,age)).normalize();
             // The beta factory originates at the eye. Hide solid geometry in
             // the near camera region instead of drawing huge clipped rocket
@@ -85,7 +85,7 @@ final class PharahBarrageRenderer {
             var tail=buffers.getBuffer(trailLayer);var entry=m.peek();int pieces=12;
             for(int i=0;i<pieces;i++){
                 double a=Math.max(0,age-i*.012),b=Math.max(0,age-(i+1)*.012);if(a==b)break;
-                var p=vec(PharahBarrageMotion.position(shot,a));var q=vec(PharahBarrageMotion.position(shot,b));
+                var p=NativeMuzzleOrigins.at(shot.identity(),vec(PharahBarrageMotion.position(shot,a)));var q=NativeMuzzleOrigins.at(shot.identity(),vec(PharahBarrageMotion.position(shot,b)));
                 var cross=q.subtract(p).crossProduct(cam.subtract(p));if(cross.lengthSquared()<1e-10)continue;var side=cross.normalize().multiply(.02375*(1-i/(double)pieces));
                 var pa=p.add(side).subtract(cam);var pb=p.subtract(side).subtract(cam);var qa=q.add(side).subtract(cam);var qb=q.subtract(side).subtract(cam);int alpha=(int)(155*(1-i/(double)pieces));
                 effect(tail,entry,(float)pa.x,(float)pa.y,(float)pa.z,0,0,210,222,240,alpha);effect(tail,entry,(float)pb.x,(float)pb.y,(float)pb.z,1,0,210,222,240,alpha);effect(tail,entry,(float)qb.x,(float)qb.y,(float)qb.z,1,1,210,222,240,alpha);effect(tail,entry,(float)qa.x,(float)qa.y,(float)qa.z,0,1,210,222,240,alpha);

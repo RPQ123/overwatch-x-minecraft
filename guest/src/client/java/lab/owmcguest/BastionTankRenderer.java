@@ -19,12 +19,14 @@ final class BastionTankRenderer {
     private static Object source;private static long world,model;
     private static Vec3d vec(NativeShotProtocol.Vec v){return new Vec3d(v.x(),v.y(),v.z());}
     private static void quad(VertexConsumer v,org.joml.Matrix4f m,Vec3d a,Vec3d b,Vec3d c,Vec3d d,int r,int g,int blue,int alpha){
+        if(MuzzlePresentation.measurementMask){r=255;g=0;blue=255;}
         for(var p:new Vec3d[]{a,b,c,d})v.vertex(m,(float)p.x,(float)p.y,(float)p.z).color(r,g,blue,alpha);
     }
     private static void ribbon(VertexConsumer v,org.joml.Matrix4f m,Vec3d a,Vec3d b,Vec3d side,double width,int r,int g,int blue,int alpha){
         var s=side.multiply(width);quad(v,m,a.subtract(s),a.add(s),b.add(s),b.subtract(s),r,g,blue,alpha);
     }
     static void register(){WorldRenderEvents.AFTER_ENTITIES.register(ctx->{
+        if(MuzzlePresentation.nativeReferenceOnly)return;
         var c=MinecraftClient.getInstance();var h=HostPoseReader.INSTANCE.latest();var s=NativeCombatRuntime.rocketView;
         if(!Boolean.getBoolean("owmc.frameExport")||s==null||h==null||c.player==null||!c.player.isAlive()||c.world==null||c.getServer()==null||ctx.matrixStack()==null
             ||!h.inputActive()||h.flags()!=1||NativeLocomotionController.INSTANCE.hero()!=0x02e0000000000015L||s.model()!=NativeLocomotionController.INSTANCE.modelId()
@@ -37,7 +39,7 @@ final class BastionTankRenderer {
         for(var shot:s.shots()){
             if(!shot.tankShell())continue;double age=(now-shot.wallMs())/1000.,speed=Math.sqrt(shot.velocity().lengthSquared());
             if(age<0||age>shot.lifetime()||speed<1||age*speed>shot.range())continue;
-            var at=vec(BastionTankPresentation.center(shot,age));if(!c.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
+            var at=NativeMuzzleOrigins.firstVisibleTank(shot.identity(),vec(BastionTankPresentation.center(shot,age)));if(!c.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
             // A renderer may run between two real server collision ticks. Hide
             // its extrapolation at a nearer block; it cannot cross a wall or
             // create its own impact/damage/sound while waiting for the server.
@@ -55,12 +57,12 @@ final class BastionTankRenderer {
                 quad(v,m,nose,nose.add(radialA.multiply(.55)),nose.add(radialB.multiply(.55)),nose,255,195,70,255);
             }
             // Short crossed orange streak, centered on the same native ray.
-            var prior=vec(BastionTankPresentation.center(shot,Math.max(0,age-BastionTankPresentation.TRAIL_SECONDS))).subtract(camera);
-            ribbon(v,m,tail,prior,right,.047,255,140,35,175);ribbon(v,m,tail,prior,up,.047,255,140,35,175);
-            ribbon(v,m,tail,prior,right,.013,255,245,180,240);drew=true;
+            var prior=NativeMuzzleOrigins.at(shot.identity(),vec(BastionTankPresentation.center(shot,Math.max(0,age-BastionTankPresentation.TRAIL_SECONDS)))).subtract(camera);
+            if(!MuzzlePresentation.measurementMask){ribbon(v,m,tail,prior,right,.047,255,140,35,175);ribbon(v,m,tail,prior,up,.047,255,140,35,175);
+            ribbon(v,m,tail,prior,right,.013,255,245,180,240);}drew=true;
             // Pharah-style emitting core, sharp star and animated rear flame.
             // This stays behind the same admitted-flight and nearer-wall gates.
-            glows.add(new GlowFrame(at,direction,age));
+            if(!MuzzlePresentation.measurementMask)glows.add(new GlowFrame(at,direction,age));
             if(seen.size()>4096)seen.clear();if(seen.add(shot.id()))NativeCombatRuntime.tankShellModelsShown++;
         }
         if(drew){buffers.draw(layer);NativeCombatRuntime.tankShellRenderFrames++;}

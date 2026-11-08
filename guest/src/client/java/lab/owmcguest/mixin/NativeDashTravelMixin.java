@@ -28,10 +28,11 @@ abstract class NativeDashTravelMixin {
     private void owmc$nativeDash(Vec3d input,CallbackInfo ci){
         if(!Boolean.getBoolean("owmc.frameExport"))return;
         var client=MinecraftClient.getInstance();if((Object)this!=client.player)return;
-        if(NativeDeadeyeController.movementLocked()){
+        if(NativeDeadeyeController.movementLocked()||lab.owmcguest.RoadhogClient.breatherLocked()){
             var velocity=client.player.getVelocity();
             client.player.setVelocity(0,client.player.getAbilities().flying?0:velocity.y,0);
         }
+        lab.owmcguest.WinstonClient.INSTANCE.beforeTravel(client);
         NativeBlinkController.INSTANCE.travel(client);
         if(lab.owmcguest.MercyClient.INSTANCE.travel(client)){ci.cancel();return;}
         if(lab.owmcguest.LucioClient.INSTANCE.travel(client)){ci.cancel();return;}

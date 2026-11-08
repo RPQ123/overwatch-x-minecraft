@@ -1,15 +1,16 @@
 """按 research/voice-catalog-20261025/download.json 下载中文英雄语音（私有素材，不进 JAR、不进提交）。
 
-保存到 ~/.universal-modder/assets/ow1-zhcn-2016/thnu-full/<hero>/<hash>.mp3，已存在的跳过；
+保存到配置的 heroVoiceAssets/<hero>/<hash>.mp3，已存在的跳过；
 校验 MP3 文件头，写 manifest.json。20261026b起只允许默认白名单台词；旧可选参数不再恢复已清退音频。
 """
 import argparse, hashlib, json, sys, time, urllib.request
 from pathlib import Path
 from urllib.parse import urlparse
+from modpack.config import paths
 
 ROOT = Path(__file__).resolve().parents[1]
 LIST = ROOT / 'research/voice-catalog-20261025/download.json'
-DEST = Path.home() / '.universal-modder/assets/ow1-zhcn-2016/thnu-full'
+DEST = paths().get('heroVoiceAssets')
 
 
 def is_mp3(b):
@@ -27,6 +28,18 @@ class ApprovedRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self,req,fp,code,msg,headers,newurl):
         if not approved_url(dict(self.row,url=newurl)):raise ValueError('Unapproved redirect')
         return super().redirect_request(req,fp,code,msg,headers,newurl)
+
+
+def local_only_ready(row,manifest):
+    """Preserve prepared local OGGs; never download or relabel missing audio."""
+    item=manifest.get(row['hash'],{})
+    try:
+        if item.get('hero')!=row['hero'] or item.get('event')!=row['event'] or item.get('format')!='ogg':return False
+        source=(DEST/item['file']).resolve()
+        if not source.is_relative_to(DEST.resolve()) or not source.is_file() or source.stat().st_size>5_000_000:return False
+        raw=source.read_bytes()
+        return raw.startswith(b'OggS') and hashlib.sha256(raw).hexdigest()==item['sha256']
+    except (KeyError,OSError,ValueError):return False
 
 
 def main():
@@ -56,6 +69,7 @@ def main():
         if f.exists() and r['hash'] in manifest:
             skipped += 1; continue
         if r.get('localOnly'):
+            if local_only_ready(r,manifest):skipped+=1;continue
             failed += 1; print('local-only: run tools/prune_voice_defaults.py --apply-private first',file=sys.stderr); continue
         try:
             if not approved_url(r):raise ValueError('Unapproved download URL')

@@ -3,6 +3,7 @@
 #include "native_beam_phase.hpp"
 #include "native_local_hero.hpp"
 #include "native_armory.hpp"
+#include "native_roadhog.hpp"
 #include <windows.h>
 #include <atomic>
 #include <filesystem>
@@ -148,7 +149,8 @@ bool loadArmory(const std::filesystem::path& directory){
     for(const auto& spec:specs){float amount=0;ArmoryBlast blast{};if(!armorySpecBounds(spec)||!resources.insert({spec.resource,spec.volleyKey}).second||!armoryAmount(header,spec,[](uintptr_t at,auto& value){return read(at,value);},amount)
         ||!armoryGravity(spec,[](uintptr_t at,auto& value){return read(at,value);})||!armoryFlash(header,spec,[](uintptr_t at,auto& value){return read(at,value);})
         ||(spec.splash>0&&!armoryBlast(spec,[](uintptr_t at,auto& value){return read(at,value);},blast))
-        ||!armoryBastionTank(header,spec,[](uintptr_t at,auto& value){return read(at,value);}))return false;}
+        ||!armoryBastionTank(header,spec,[](uintptr_t at,auto& value){return read(at,value);})
+        ||!roadhogDefinition(header,spec,[](uintptr_t at,auto& value){return read(at,value);}))return false;}
     armory=header;armorySpecs=std::move(specs);++armoryRebindings;return true;
 }
 void synchronize(const std::filesystem::path& directory){
@@ -428,6 +430,9 @@ uintptr_t WINAPI factoryHook(uintptr_t a,uintptr_t b,uintptr_t c,uintptr_t d){
                         &&blastValid&&armoryGravity(spec,[](uintptr_t at,auto& value){return read(at,value);})&&armoryAmount(armory,spec,[](uintptr_t at,auto& value){return read(at,value);},e.damage,evaluateDamage)&&e.damage>0
                         &&armoryBastionTank(armory,spec,[](uintptr_t at,auto& value){return read(at,value);})
                         &&armoryBastionTankFlight(local.hero,row.resource,row.status,row.result,row.type,row.speed,row.lifetime,row.range)
+                        &&roadhogDefinition(armory,spec,[](uintptr_t at,auto& value){return read(at,value);})
+                        &&roadhogFactory(local.hero,row.resource,row.status,row.result,row.type,row.speed,row.lifetime,row.range)
+                        &&(local.hero!=roadHogHero||e.damage==(row.resource==0x040000000000029aULL?9.f:row.resource==0x0400000000000295ULL?50.f:7.f))
                         &&read(component(local.model,1)+0x60,e.nativeFeet)&&finite(e.nativeFeet)&&guest(e.guest);
                     row.evaluatedDamage=e.damage;
                     if(valid&&barrage&&!barrageScope.admit(row.owner,row.volley,row.tick,row.shot,e.guest.worldId,e.guest.hostGeneration,e.guest.generation)){
@@ -481,7 +486,7 @@ void report(const std::filesystem::path& directory){
     uint64_t hero=0;uint32_t modelId=0;{std::lock_guard<std::mutex> lock(bindingMutex);hero=local.hero;modelId=local.modelId;}
     auto rows=journal.snapshot();auto path=directory/(L"native-emissions-"+std::to_wstring(GetCurrentProcessId())+L".json"),temp=path;temp+=L".tmp";
     auto acknowledged=journal.acknowledged(),last=rows.empty()?acknowledged:rows.back().id;
-    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":16,\"protocol\":3,\"epoch\":"<<epoch<<",\"heartbeat\":"<<nowMs()<<",\"baseId\":"<<(rows.empty()?last+1:rows.front().id)<<",\"lastId\":"<<last<<",\"acknowledged\":"<<acknowledged<<",\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")<<",\"creation\":"<<request.creation<<",\"hostGeneration\":"<<request.hostGeneration
+    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":17,\"protocol\":3,\"epoch\":"<<epoch<<",\"heartbeat\":"<<nowMs()<<",\"baseId\":"<<(rows.empty()?last+1:rows.front().id)<<",\"lastId\":"<<last<<",\"acknowledged\":"<<acknowledged<<",\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")<<",\"creation\":"<<request.creation<<",\"hostGeneration\":"<<request.hostGeneration
       <<",\"hero\":"<<hero<<",\"modelId\":"<<modelId<<",\"combatReady\":"<<(combatReady?"true":"false")<<",\"rebindings\":"<<rebindings
       <<",\"calls\":"<<calls<<",\"accepted\":"<<accepted<<",\"filtered\":"<<filtered<<",\"refused\":"<<refused<<",\"failures\":"<<failures<<",\"failureStage\":\""<<failureStage<<"\",\"overflow\":"<<(journal.overflowed()?"true":"false")<<",\"mcDamageSent\":false,\"events\":[";
     for(size_t i=0;i<rows.size();i++){

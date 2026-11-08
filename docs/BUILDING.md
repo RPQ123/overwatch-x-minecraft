@@ -59,9 +59,9 @@ $packJava = 'minecraft-1.21.1/runtime/java-runtime-delta/windows-x64/java-runtim
 
 `--public` 排除 OW 客户端、私有语音 / 模型及打包器定义的私有资源输入。它不代表包已经满足所有第三方许可、对应源码提供、账号登录或可运行条件。完整内部包的默认资源范围、运行时要求和验证方式见 [MODPACK.md](MODPACK.md)；该文档保留历史记录，最新包状态以 [TAKEOVER.md](TAKEOVER.md) 顶部为准。
 
-## 当前版本差异
+## OWMC v1.0.0
 
-2026-11-03 静态核对：当前源码与开发 JAR 已有 `SurvivalMenu`、`HeroSummonRuntime`；现存 `dist/OWMC-1.0.0` JAR 没有这两个类。因此，不能把新版 README 的 F5 / 生存功能当作旧包已包含的内容。主控应在后续包中同步、正常启动验收并更新校验和，再填写 README 的下载占位。本轮没有修改旧包。
+下载区对应当前源码重建的 v1.0.0，包含 14 位英雄、F5 召唤与生存功能。请按下载区给出的 SHA256 校验完整包。
 
 ## 公开的内容
 

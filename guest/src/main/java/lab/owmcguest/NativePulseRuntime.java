@@ -122,6 +122,7 @@ public final class NativePulseRuntime {
         // Ultimate damage never earns the next ultimate, even when the short
         // native throw animation ended before this delayed detonation.
         damage+=actual;explosions++;
+        PulseBurstPresentation.launch(active,at);
         // Keep original cover/self damage decisions before the user-custom hole.
         var terrain=NativeTerrainBurst.explode(w,p,at,NativeExplosionTerrain.PULSE);
         if(terrain.applied()){terrainBursts++;terrainBlocks+=terrain.blocksDestroyed();}terrainError=terrain.rejection();
@@ -136,5 +137,5 @@ public final class NativePulseRuntime {
         status=o.toString();
     }
     private static void clear(boolean cancel){if(cancel)cancelled++;active=null;target=null;attached=false;fuse=0;publish();}
-    public static void resetSession(){if(active!=null)clear(true);lastTick=0;lastDeployment=null;suspended=false;publish();}
+    public static void resetSession(){if(active!=null)clear(true);PulseBurstPresentation.reset();lastTick=0;lastDeployment=null;suspended=false;publish();}
 }

@@ -73,8 +73,8 @@ class NativeSlotFilter {
     static BOOL WINAPI messageW(MSG* msg,HWND w,UINT lo,UINT hi){auto result=messageWOriginal(msg,w,lo,hi);if(result>0)messageFilter(msg,true);return result;}
     static BOOL WINAPI messageA(MSG* msg,HWND w,UINT lo,UINT hi){auto result=messageAOriginal(msg,w,lo,hi);if(result>0)messageFilter(msg,true);return result;}
 public:
-    // integrator/builders: native top-row 1/2 only, with fresh Torbjorn/FPS proof.
-    // Numpad, other heroes, wheel/middle and the Deadeye lock keep the old policy.
+    // Native top-row 1/2 only, with current reflected multi-weapon/FPS proof.
+    // Empty/single slots, numpad, wheel/middle and the motion lock stay filtered.
     bool blocksSlotKey(unsigned key) const {
         return weaponSlotKey(key)&&!((key=='1'||key=='2')&&scoped()&&!motionScoped()
             &&weaponSelectionGate&&weaponSelectionGate());

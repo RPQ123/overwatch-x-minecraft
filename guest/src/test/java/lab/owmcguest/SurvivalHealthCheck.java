@@ -44,8 +44,10 @@ public final class SurvivalHealthCheck {
             health.setInt(0x98+20,1);require(reader.poll(pose,19,0x02e0000000000029L)==null,"additional native pools retained");health.setInt(0x98+20,0);
             base.setInt(0xa0,201);require(reader.poll(pose,19,0x02e0000000000029L)==null,"changed typed config rejected");base.setInt(0xa0,200);
             reader.close();b.addProperty("creation",creation.getLong(0)-1);Files.writeString(file,b.toString());require(reader.poll(pose,19,0x02e0000000000029L)==null,"PID reuse rejected");
-            require(HeroNpcCatalog.ENTRIES.size()==12&&HeroNpcCatalog.ENTRIES.stream().map(HeroNpcCatalog.Entry::id).distinct().count()==12,"all twelve heroes unique");
+            require(HeroNpcCatalog.ENTRIES.size()==14&&HeroNpcCatalog.ENTRIES.stream().map(HeroNpcCatalog.Entry::id).distinct().count()==14
+                &&HeroNpcCatalog.entry(12).hero()==0x40&&HeroNpcCatalog.entry(12).health()==600
+                &&HeroNpcCatalog.entry(13).hero()==9&&HeroNpcCatalog.entry(13).health()==500,"existing heroes plus original600HP Roadhog and500HP Winston, unique");
         }finally{kernel.CloseHandle(handle);if(old==null)System.clearProperty("owmc.nativeEventsDirectory");else System.setProperty("owmc.nativeEventsDirectory",old);}
-        System.out.println("PASS: survival native pools, metadata, damage/heal/zero, stale owner/config/creation, twelve-hero catalog");
+        System.out.println("PASS: survival native pools, metadata, damage/heal/zero, stale owner/config/creation, twelve original indices plus Roadhog");
     }
 }

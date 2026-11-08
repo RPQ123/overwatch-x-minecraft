@@ -20,7 +20,7 @@ public final class HeroSummonRuntime {
             var own=entities.stream().filter(e->owner.equals(e.summonedBy)).toList();
             for(var e:own){e.discard();entities.remove(e);cleared++;}tick(server);return "";
         }
-        var selected=new ArrayList<Integer>();if(choice==-1)for(int i=0;i<12;i++)selected.add(i);else{HeroNpcCatalog.entry(choice);selected.add(choice);}
+        var selected=new ArrayList<Integer>();if(choice==-1)for(int i=0;i<HeroNpcCatalog.ENTRIES.size();i++)selected.add(i);else{HeroNpcCatalog.entry(choice);selected.add(choice);}
         if(entities.stream().filter(e->e.isAlive()&&owner.equals(e.summonedBy)).count()+selected.size()>48)return "最多召唤 48 位英雄，请先清除召唤";
         var worldObject=p.getServerWorld();var forward=p.getRotationVec(1).multiply(1,0,1).normalize();if(forward.lengthSquared()<.5)forward=new Vec3d(0,0,1);
         var right=new Vec3d(-forward.z,0,forward.x);var staged=new ArrayList<HeroNpcEntity>();

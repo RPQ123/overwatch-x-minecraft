@@ -42,7 +42,7 @@ final class HanzoArrowRenderer {
         if(v!=null){var s=v.scope();
             if(current(client,s.owner(),s.world(),s.model(),s.source().hostGeneration(),v.wall()))for(var a:v.arrows()){
                 var kind=a.kind()==HanzoArrowPresentation.Kind.SONIC?HanzoArrowMesh.Kind.SONIC:HanzoArrowMesh.Kind.PRIMARY;
-                if(draw(ctx,client,point(a.at()),point(a.direction()),kind,a.stuck())){
+                if(draw(ctx,client,a.stuck()?point(a.at()):NativeMuzzleOrigins.at(a.identity(),point(a.at())),point(a.direction()),kind,a.stuck())){
                     if(a.kind()==HanzoArrowPresentation.Kind.SONIC)sonicFrames++;else primaryFrames++;
                     if(a.stuck())activeStuck++;else if(a.kind()==HanzoArrowPresentation.Kind.SONIC)activeSonic++;else activePrimary++;
                 }
@@ -51,7 +51,7 @@ final class HanzoArrowRenderer {
         for(var a:NativeHanzoSkillRuntime.arrowViews){var s=a.scope();
             if(!current(client,s.owner(),s.world(),s.model(),s.source(),a.wall()))continue;
             if(!a.scatter())continue; // Dragon presentation belongs to its separate renderer.
-            if(draw(ctx,client,a.at(),a.vel(),HanzoArrowMesh.Kind.SCATTER,a.stuck())){
+            if(draw(ctx,client,a.stuck()?a.at():NativeMuzzleOrigins.at(a.visualId(),a.at()),a.vel(),HanzoArrowMesh.Kind.SCATTER,a.stuck())){
                 if(a.child())scatterChildFrames++;else scatterParentFrames++;
                 if(a.stuck())activeStuck++;else if(a.child())activeChild++;else activeParent++;
             }
@@ -106,7 +106,7 @@ final class HanzoArrowRenderer {
         for(var trail:v.trails()){
             if(now>=trail.expires()||trail.points().isEmpty())continue;
             String kind=trail.kind().name().toLowerCase(Locale.ROOT);float fade=Math.min(1,(trail.expires()-now)/(float)HanzoArrowEffects.TRAIL_NANOS);
-            var points=trail.points();var last=point(points.getLast().at());
+            var points=trail.points();var last=NativeMuzzleOrigins.at(trail.id(),point(points.getLast().at()));
             if(sprite(ctx,client,kind+"-glow",last,trail.kind()==HanzoArrowEffects.Kind.SCATTER?.20f:.16f,fade)){
                 glowFrames++;if(trail.kind()==HanzoArrowEffects.Kind.SCATTER){if(trail.child())scatterChildGlowFrames++;else scatterParentGlowFrames++;}
             }
@@ -116,10 +116,10 @@ final class HanzoArrowRenderer {
                 if(trail.kind()==HanzoArrowEffects.Kind.SONIC){
                     // 0244 exposes a particle sprite, not a 075d trail. Keep
                     // original sprite geometry at real past sweep samples.
-                    if(sprite(ctx,client,"sonic-glow",point(a.at()),.12f,ageFade*.65f))trailFrames++;
+                    if(sprite(ctx,client,"sonic-glow",NativeMuzzleOrigins.at(trail.id(),point(a.at())),.12f,ageFade*.65f))trailFrames++;
                 }else{
-                    if(ribbon(ctx,client,kind+"-trail",point(a.at()),point(b.at()),.045f,ageFade))trailFrames++;
-                    ribbon(ctx,client,kind+"-trail",point(a.at()),point(b.at()),.12f,ageFade*.22f);
+                    if(ribbon(ctx,client,kind+"-trail",NativeMuzzleOrigins.at(trail.id(),point(a.at())),NativeMuzzleOrigins.at(trail.id(),point(b.at())),.045f,ageFade))trailFrames++;
+                    ribbon(ctx,client,kind+"-trail",NativeMuzzleOrigins.at(trail.id(),point(a.at())),NativeMuzzleOrigins.at(trail.id(),point(b.at())),.12f,ageFade*.22f);
                 }
             }
         }

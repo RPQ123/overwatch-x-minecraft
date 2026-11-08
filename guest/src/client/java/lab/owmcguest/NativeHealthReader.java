@@ -59,18 +59,34 @@ final class NativeHealthReader implements AutoCloseable {
             }
             verify();if(n("hero")!=hero)throw new IllegalArgumentException("health hero differs");byte[][] raw=new byte[3][];double total=0;
             for(int j=0;j<3;j++){raw[j]=read(n("health")+new int[]{0x98,0x1d8,0x318}[j],320);total+=bytes(raw[j]).getFloat(8);}
-            double maximum=Arrays.stream(amounts).sum();SurvivalHealthPlan.plan(raw,amounts,Math.min(total,maximum));verify();
+            double maximum=Arrays.stream(amounts).sum();
+            if(hero==WinstonRules.HERO){var pools=WinstonHealthPools.plan(raw,amounts,WinstonClient.primalLease(),Double.NaN);maximum=pools.maximum();total=pools.current();}
+            else SurvivalHealthPlan.plan(raw,amounts,Math.min(total,maximum));verify();
             error="";return new State(source,model,hero,maximum,total,raw);
         }catch(Exception failure){error=failure.toString();close();return null;}
     }
-    boolean write(State expected,double target){
+    boolean write(State expected,double target){return write(expected,target,()->true);}
+    boolean write(State expected,double target,java.util.function.BooleanSupplier admitted){
+        if(!admitted.getAsBoolean())return false;
         if(handle==null||binding==null||expected.source()!=source||expected.model()!=n("modelId"))return false;
         try{
+            if(expected.hero()==WinstonRules.HERO){
+                var plan=WinstonHealthPools.plan(expected.raw(),amounts,WinstonClient.primalLease(),target);verify();
+                int[] offsets={0x98,0x1d8,0x318};
+                for(int j=0;j<3;j++)if(!Arrays.equals(read(n("health")+offsets[j],320),expected.raw()[j]))return false;
+                for(var write:plan.writes()){
+                    long address=n("health")+offsets[write.pool()]+write.offset();if(Arrays.equals(read(address,12),write.bytes()))continue;
+                    verify();if(!admitted.getAsBoolean())return false;try(var count=new Memory(8)){
+                        if(!kernel.WriteProcessMemory(handle,Pointer.createConstant(address),write.bytes(),12,count)||count.getLong(0)!=12)throw new IllegalStateException("Winston native health write failed");
+                    }
+                }
+                verify();return true;
+            }
             var plan=SurvivalHealthPlan.plan(expected.raw(),amounts,target);verify();
             for(int j=0;j<3;j++)if(!Arrays.equals(read(n("health")+new int[]{0x98,0x1d8,0x318}[j],320),expected.raw()[j]))return false;
             for(int j=0;j<3;j++){
                 if(Arrays.equals(Arrays.copyOf(expected.raw()[j],12),plan[j]))continue;
-                verify();try(var count=new Memory(8)){
+                verify();if(!admitted.getAsBoolean())return false;try(var count=new Memory(8)){
                     if(!kernel.WriteProcessMemory(handle,Pointer.createConstant(n("health")+new int[]{0x98,0x1d8,0x318}[j]),plan[j],12,count)||count.getLong(0)!=12)throw new IllegalStateException("native health write failed");
                 }
             }

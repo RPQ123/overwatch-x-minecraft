@@ -5,7 +5,7 @@ from observe_native_weapon_states import WeaponStates
 from native_hero_profiles import camera_definition
 
 HEROES={0x29:'Genji',0x42:'McCree',8:'Pharah',2:'Reaper',0x6e:'Soldier76',3:'Tracer',
-        0x15:'Bastion',5:'Hanzo',0x65:'Junkrat',0xdd:'Mei',6:'Torbjorn',10:'Widowmaker'}
+        0x15:'Bastion',5:'Hanzo',0x65:'Junkrat',0xdd:'Mei',6:'Torbjorn',10:'Widowmaker',0x40:'Roadhog'}
 HEADER=struct.Struct('<8sIIII8QII')
 SPEC=struct.Struct('<12Q4I6fIf')
 
@@ -21,7 +21,8 @@ class ArmoryBindingPending(ValueError):
 # their parameters do not establish the missing skill/world behavior.
 PRIMARY_RESOURCES={0x42:{0x040000000000037d},2:{0x040000000000004a},3:{0x0400000000000018},8:{0x0400000000000052,0x040000000000010f},0x15:{0x0400000000000205,0x0400000000000207,0x04000000000003ce},
                    5:{0x0400000000000144,0x040000000000020b,0x0400000000000149,0x040000000000020d},0xdd:{0x040000000000108b,0x04000000000008be},
-                   6:{0x0400000000000157,0x04000000000002d0},10:{0x040000000000004c,0x0400000000000107,0x040000000000004b,0x0400000000000108},0x6e:{0x04000000000003d4,0x040000000000072c}}
+                   6:{0x0400000000000157,0x04000000000002d0},10:{0x040000000000004c,0x0400000000000107,0x040000000000004b,0x0400000000000108},0x6e:{0x04000000000003d4,0x040000000000072c},
+                   0x40:{0x040000000000029a,0x0400000000000295,0x0400000000000405}}
 
 def hanzo_sonic_profile(r,hero,script,index,node,resource,gravity,damage):
     """Current typed Sonic-only gate; never borrow ordinary/Scatter factories.
@@ -292,6 +293,9 @@ def prepare(process,pid):
                         effect=1;splash=blast['splash'];radius=blast['outer']
                     if resource in (0x0400000000000149,0x040000000000020d):
                         hanzo_sonic_profile(r,hero,script,index,node,resource,gravity,damage)
+                    if suffix==0x40:
+                        from roadhog_profile import validate_weapon
+                        validate_weapon(r,script,index,node,resource,gravity,amount)
                     if suffix==0x65:
                         raise ValueError('Weapon physics/status calibration is pending; no approximate adapter admitted')
                     specs.append(dict(resource=resource,resourceAddress=address,script=instance,graph=graph,bag=bag,node=index,definition=node,
@@ -318,6 +322,8 @@ def prepare(process,pid):
             issues.append(dict(resource=f'{resource[0]:016x}',error='Ambiguous damage variants'));continue
         unique.append(group[0])
     if not unique or len(unique)>64:raise ValueError('No bounded unambiguous weapon profiles')
+    if hero==0x02e0000000000040 and {v['resource'] for v in unique}!=PRIMARY_RESOURCES[0x40]:
+        raise ArmoryBindingPending('Roadhog requires all three original weapon profiles: '+json.dumps(issues))
     times=[ctypes.create_string_buffer(8) for _ in range(4)]
     process.kernel.GetProcessTimes.argtypes=[ctypes.c_void_p,*([ctypes.c_void_p]*4)]
     if not process.kernel.GetProcessTimes(process.handle,*times):raise ctypes.WinError(ctypes.get_last_error())

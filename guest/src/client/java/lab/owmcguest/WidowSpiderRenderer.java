@@ -22,7 +22,7 @@ public final class WidowSpiderRenderer extends CaveSpiderEntityRenderer {
         if(client.world==null||context.matrixStack()==null)return;
         if(airborne==null||airborne.getWorld()!=client.world)
             airborne=new WidowSpiderEntity(WidowSpiderEntity.TYPE,client.world);
-        var at=view.at();var camera=context.camera().getPos();
+        var at=view.stuck()?view.at():NativeMuzzleOrigins.at(view.visualId(),view.at());var camera=context.camera().getPos();
         airborne.setPosition(at);airborne.setYaw(view.yaw());airborne.bodyYaw=view.yaw();
         airborne.prevBodyYaw=view.yaw();airborne.age=view.age();
         var buffers=client.getBufferBuilders().getEntityVertexConsumers();

@@ -54,7 +54,8 @@ public final class NativeHanzoSkillRuntime {
     private static long scatters,splits,childHits,dragonCasts,dragonHits;private static double damageApplied;
     private static long scatterNativeContexts,scatterFallbackContexts,scatterChildrenCreated;
     private static HanzoScatterContext.Parameters lastScatterContext=HanzoScatterContext.fallback("no Scatter cast yet");
-    public record ArrowView(Vec3d at,Vec3d vel,Scope scope,boolean scatter,boolean child,boolean stuck,long wall){
+    public record ArrowView(Vec3d at,Vec3d vel,Scope scope,boolean scatter,boolean child,boolean stuck,long wall,String visualId){
+        public ArrowView(Vec3d at,Vec3d vel,Scope scope,boolean scatter,boolean child,boolean stuck,long wall){this(at,vel,scope,scatter,child,stuck,wall,"");}
         // Existing dragon-start publication retains its old constructor/behavior.
         public ArrowView(Vec3d at,Vec3d vel,Scope scope){this(at,vel,scope,false,false,false,System.currentTimeMillis());}
     }
@@ -80,7 +81,11 @@ public final class NativeHanzoSkillRuntime {
         scatter(server,scope,HanzoScatterContext.fallback("no context supplied; unchanged MC fallback"));
     }
     public static void scatter(MinecraftServer server,Scope scope,HanzoScatterContext.Parameters parameters){
+        scatter(server,scope,parameters,"");
+    }
+    public static void scatter(MinecraftServer server,Scope scope,HanzoScatterContext.Parameters parameters,String visualLaunch){
         var p=owner(server,scope);if(p==null)return;var a=new Arrow();a.scope=scope;a.parent=true;
+        MuzzlePresentation.alias(visualLaunch,"scatter:"+a.visualId);
         var values=parameters==null?HanzoScatterContext.fallback("Scatter context unavailable"):parameters;
         a.pos=p.getEyePos();a.vel=values.nativeValues()?new Vec3d(values.velocity().x(),values.velocity().y(),values.velocity().z()).multiply(1/20.0):p.getRotationVec(1).multiply(PARENT);
         a.damage=values.parentDamage();a.childDamage=values.childDamage();a.childSpeed=values.childSpeed()/20;
@@ -187,13 +192,14 @@ public final class NativeHanzoSkillRuntime {
         embedded.add(new Embedded(arrow.scope,at,arrow.vel,arrow.child,server.getTicks()+STUCK_TICKS));
     }
     private static void present(Arrow a,Vec3d to,HanzoArrowEffects.Contact contact){
+        if(contact!=HanzoArrowEffects.Contact.NONE)MuzzlePresentation.contact("scatter:"+a.visualId,new NativeShotProtocol.Vec(to.x,to.y,to.z));
         var s=a.scope;HanzoArrowEffects.segment(new HanzoArrowEffects.Scope(s.owner(),s.world(),s.model(),s.source()),
             "scatter:"+a.visualId,HanzoArrowEffects.Kind.SCATTER,a.child,
             new NativeShotProtocol.Vec(a.pos.x,a.pos.y,a.pos.z),new NativeShotProtocol.Vec(to.x,to.y,to.z),contact);
     }
     private static void publish(){
         long wall=System.currentTimeMillis();
-        var av=new ArrayList<ArrowView>();for(var x:arrows)av.add(new ArrowView(x.pos,x.vel,x.scope,true,x.child,false,wall));
+        var av=new ArrayList<ArrowView>();for(var x:arrows)av.add(new ArrowView(x.pos,x.vel,x.scope,true,x.child,false,wall,"scatter:"+x.visualId));
         for(var x:embedded)av.add(new ArrowView(x.at(),x.direction(),x.scope(),true,x.child(),true,wall));
         arrowViews=List.copyOf(av);
         var dv=new ArrayList<DragonView>();long sampled=System.nanoTime();

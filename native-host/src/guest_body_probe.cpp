@@ -13,11 +13,18 @@
 #include "native_recall_ammo.hpp"
 #include "native_wraith_completion.hpp"
 #include "native_shadow_completion.hpp"
+#include "native_weapon_slots.hpp"
+#include "native_pickup_scrap.hpp"
+#include "native_placement_actions.hpp"
+#include "native_winston_actions.hpp"
+#include "native_winston_presentation.hpp"
+#include "native_hero_audio_gain.hpp"
 #include <windows.h>
 #include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <memory>
+#include <mutex>
 
 using namespace passthrough;
 namespace {
@@ -50,6 +57,22 @@ uintptr_t base=0,admin=0,controller=0,model=0,reference=0;unsigned localId=0,mod
 BodyAddresses addresses{};
 NativeLocalHero current;
 NativeMeterDisplay nativeMeterDisplay;
+NativeWeaponSlots nativeWeaponSlots;
+NativePickupScrap nativePickupScrap;
+std::shared_ptr<const ScrapCreditRequest> scrapCreditRequest;
+std::shared_ptr<const ScrapCreditAck> scrapCreditAck;
+NativePlacementActions nativePlacementActions;
+std::array<NativeWinstonActions,2> nativeWinstonActions;
+NativeWinstonPresentation nativeWinstonPresentation;
+NativeHeroAudioGain nativeHeroAudioGain;std::mutex nativeHeroAudioMutex;
+bool audioProfile(bool enabled,bool stopping=false){
+    std::lock_guard<std::mutex> lock(nativeHeroAudioMutex);
+    auto read=[](uintptr_t p,void* out,size_t size){SIZE_T n=0;return ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(p),out,size,&n)&&n==size;};
+    auto write=[](uintptr_t p,const void* in,size_t size){SIZE_T n=0;return WriteProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(p),in,size,&n)&&n==size;};
+    return stopping?nativeHeroAudioGain.stop(read,write):nativeHeroAudioGain.update(base,enabled,read,write);
+}
+std::array<std::shared_ptr<const PlacementActionRequest>,5> placementRequests;
+std::array<std::shared_ptr<const PlacementActionAck>,5> placementAcks;
 NativeDeadeyePresentation nativeDeadeye;
 NativeRecallCompletion nativeRecall;
 NativeRecallAmmo nativeRecallAmmo;
@@ -128,8 +151,15 @@ uintptr_t WINAPI tick(void* object,UINT cf){
             unsigned promoted=0;
             if(!localBucketCompatibility(admin,current,reader,writer,promoted)){++failures;active=false;}
             bucketPromotions+=promoted;
+            if(active)nativeWeaponSlots.update(base,admin,current,reader,writer,
+                [](uintptr_t fn,uintptr_t primitive,uintptr_t sync,uintptr_t instance,uintptr_t user){
+                    using Notify=uintptr_t(WINAPI*)(void*,void*,void*,const void*,void*,bool);
+                    return reinterpret_cast<Notify>(fn)(reinterpret_cast<void*>(primitive),reinterpret_cast<void*>(sync),
+                        reinterpret_cast<void*>(instance),reinterpret_cast<void*>(primitive+0xa0),reinterpret_cast<void*>(user),false)!=0;
+                });
         }
     }
+    audioProfile(active&&identity()&&current.hero==0x02e0000000000040ULL);
     auto result=reinterpret_cast<Tick>(original[0])(object,cf);++ticks;
     if(!active)return result;
     // Native selection destroys/recreates both entities. Rebind on the native
@@ -167,6 +197,29 @@ uintptr_t WINAPI tick(void* object,UINT cf){
     if(freshBody&&nativeGameplayView(base,admin,reader)){
         auto command=std::atomic_load(&deadeyeRequest);
         DeadeyePresentationContext c{GetCurrentProcessId(),nativeCreation,nowMs(),s.hostGeneration,s.worldId,base,reinterpret_cast<uintptr_t>(GetModuleHandleW(L"inject.dll"))};
+        nativeWinstonPresentation.update(c,current,reader,[](uintptr_t function,uintptr_t script,int node,bool start){
+            reinterpret_cast<void(WINAPI*)(void*,int,bool)>(function)(reinterpret_cast<void*>(script),node,start);
+        });
+        int placementKind=current.hero==0x02e00000000000ddULL?1:current.hero==0x02e0000000000006ULL?2:current.hero==0x02e000000000000aULL?3:0;
+        if(current.hero==0x02e0000000000009ULL)for(unsigned role=0;role<2;role++){
+            auto command=std::atomic_load(&placementRequests[role+3]);auto& action=nativeWinstonActions[role];
+            if(action.update(command.get(),c,current,reader,[](uintptr_t function,uintptr_t script,int node,bool){
+                reinterpret_cast<void(WINAPI*)(void*,int)>(function)(reinterpret_cast<void*>(script),node);
+            },[](uintptr_t at,const void* data,size_t size){SIZE_T n=0;return WriteProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(at),data,size,&n)&&n==size;}))
+                std::atomic_store(&placementAcks[role+3],std::make_shared<const PlacementActionAck>(action.ack));
+        }
+        if(placementKind){auto placement=std::atomic_load(&placementRequests[placementKind-1]);
+            if(nativePlacementActions.update(placement.get(),c,current,reader,[](uintptr_t function,uintptr_t script,int node,bool start){
+                if(function==reinterpret_cast<uintptr_t>(GetModuleHandleW(L"inject.dll"))+0x7abc0)
+                    reinterpret_cast<void(WINAPI*)(void*,int)>(function)(reinterpret_cast<void*>(script),node);
+                else reinterpret_cast<void(WINAPI*)(void*,int,bool)>(function)(reinterpret_cast<void*>(script),node,start);
+            },[](uintptr_t at,const void* data,size_t size){SIZE_T n=0;return WriteProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(at),data,size,&n)&&n==size;}))std::atomic_store(&placementAcks[placementKind-1],std::make_shared<const PlacementActionAck>(nativePlacementActions.ack));
+        }
+        auto scrapCommand=std::atomic_load(&scrapCreditRequest);
+        if(nativePickupScrap.update(scrapCommand.get(),c,current,reader,[](uintptr_t fn,uintptr_t primitive,uintptr_t sync,uintptr_t instance,const void* value,uintptr_t user){
+            using Notify=uintptr_t(WINAPI*)(void*,void*,void*,const void*,void*,bool);
+            return reinterpret_cast<Notify>(fn)(reinterpret_cast<void*>(primitive),reinterpret_cast<void*>(sync),reinterpret_cast<void*>(instance),value,reinterpret_cast<void*>(user),false)!=0;
+        }))std::atomic_store(&scrapCreditAck,std::make_shared<const ScrapCreditAck>(nativePickupScrap.ack));
         auto recall=std::atomic_load(&recallBinding);
         auto recallResult=std::atomic_load(&recallAck);
         auto wraith=std::atomic_load(&wraithBinding);
@@ -260,10 +313,24 @@ uintptr_t WINAPI tick(void* object,UINT cf){
     publishFlight(s,wantsFlight?nativeVelocity:wantsMotor?motorVelocity:Vec3{},wantsBlink?2u:wantsMotor?3u:uint32_t(wantsFlight&&captured));
     ++writes;if(s.climbing)++climbTicks;if(s.grounded)++grounded;else ++airborne;lastSequence=s.sequence;return result;
 }
-void stop(){active=false;if(hooked){auto previous=InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),original,owned);restored=previous==owned||previous==original;}}
+void stop(){active=false;bool hookRestored=!hooked;if(hooked){auto previous=InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),original,owned);hookRestored=previous==owned||previous==original;}restored=audioProfile(false,true)&&hookRestored;}
 void report(const std::filesystem::path& directory){
     auto path=directory/(L"body-sync-"+std::to_wstring(GetCurrentProcessId())+L".json"),temp=path;temp+=L".tmp";
-    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":26,\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")
+    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":39,\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")
+      <<",\"roadhogAudioBaseline\":"<<nativeHeroAudioGain.baseline.load()<<",\"roadhogAudioEffective\":"<<nativeHeroAudioGain.effective.load()
+      <<",\"roadhogAudioBoosted\":"<<(nativeHeroAudioGain.boosted?"true":"false")<<",\"roadhogAudioCapped\":"<<(nativeHeroAudioGain.capped?"true":"false")
+      <<",\"roadhogAudioApplications\":"<<nativeHeroAudioGain.applications.load()<<",\"roadhogAudioRestorations\":"<<nativeHeroAudioGain.restorations.load()<<",\"roadhogAudioRefused\":"<<nativeHeroAudioGain.refused.load()<<",\"roadhogAudioExternalChanges\":"<<nativeHeroAudioGain.externalChanges.load()
+      <<",\"winstonJumpCalls\":"<<nativeWinstonActions[0].calls<<",\"winstonJumpCompleted\":"<<nativeWinstonActions[0].completed<<",\"winstonJumpRefused\":"<<nativeWinstonActions[0].refused
+      <<",\"winstonBarrierCalls\":"<<nativeWinstonActions[1].calls<<",\"winstonBarrierCompleted\":"<<nativeWinstonActions[1].completed<<",\"winstonBarrierRefused\":"<<nativeWinstonActions[1].refused
+      <<",\"winstonClockWrites\":"<<(nativeWinstonActions[0].clockWrites+nativeWinstonActions[1].clockWrites)
+      <<",\"winstonPoseEnds\":"<<nativeWinstonPresentation.ends<<",\"winstonPoseCompleted\":"<<nativeWinstonPresentation.completed<<",\"winstonPoseRefused\":"<<nativeWinstonPresentation.refused
+      <<",\"placementOriginalCalls\":"<<nativePlacementActions.calls<<",\"placementOriginalCompleted\":"<<nativePlacementActions.completed<<",\"placementOriginalRefused\":"<<nativePlacementActions.refused
+      <<",\"placementNativeCounterStarts\":"<<nativePlacementActions.counterStarts
+      <<",\"scrapNativeCredits\":"<<nativePickupScrap.credits<<",\"scrapNativeRefused\":"<<nativePickupScrap.refused
+      <<",\"weaponSlotModel\":"<<nativeWeaponSlots.modelId<<",\"weaponSlotCount\":"<<nativeWeaponSlots.count
+      <<",\"weaponSlotSelected\":"<<nativeWeaponSlots.selected<<",\"weaponSlotInitializations\":"<<nativeWeaponSlots.initializations
+      <<",\"weaponSlotParameterWrites\":"<<nativeWeaponSlots.parameterWrites<<",\"weaponSlotNotices\":"<<nativeWeaponSlots.notices
+      <<",\"weaponSlotRefused\":"<<nativeWeaponSlots.refused<<",\"weaponSlotWallMs\":"<<nowMs()
       <<",\"recallCompletionCalls\":"<<nativeRecall.calls<<",\"recallCompleted\":"<<nativeRecall.completed<<",\"recallCompletionRefused\":"<<nativeRecall.refused
       <<",\"recallHistoryCalls\":"<<nativeRecall.historyCalls<<",\"recallHistoryCompleted\":"<<nativeRecall.historyCompleted
       <<",\"recallAmmoRestored\":"<<nativeRecallAmmo.restored<<",\"recallAmmoRefused\":"<<nativeRecallAmmo.refused
@@ -308,10 +375,39 @@ DWORD WINAPI worker(void*){
     }
     nativeCreation=creationNumber.QuadPart;
     std::shared_ptr<const DeadeyePresentationAck> savedDeadeye;
+    std::shared_ptr<const ScrapCreditAck> savedScrap;
+    std::array<std::shared_ptr<const PlacementActionAck>,5> savedPlacement;
+    {std::lock_guard<std::mutex> lock(nativeHeroAudioMutex);if(!nativeHeroAudioGain.begin()){++failures;report(dir);CloseHandle(halt);return 0;}
+        nativeHeroAudioGain.prepare(base,[](uintptr_t p,void* out,size_t size){SIZE_T n=0;return ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(p),out,size,&n)&&n==size;});}
     owned=new void*[3]{reinterpret_cast<void*>(tick),original[1],original[2]};active=true;
     if(InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),owned,original)!=original){active=false;++failures;report(dir);CloseHandle(halt);return 0;}
     for(unsigned i=0;i<2880000&&active;i++){
         if(WaitForSingleObject(halt,10)!=WAIT_TIMEOUT)break;
+        for(int k=1;k<=5;k++){
+            PlacementActionRequest packet{};
+            auto name=L"native-placement-"+std::to_wstring(k<=3?k:k+1);
+            std::ifstream input(dir/(name+L"-request-"+std::to_wstring(GetCurrentProcessId())+L".bin"),std::ios::binary);
+            input.read(reinterpret_cast<char*>(&packet),sizeof packet);
+            if(input&&input.peek()==EOF)std::atomic_store(&placementRequests[k-1],std::make_shared<const PlacementActionRequest>(packet));
+            else std::atomic_store(&placementRequests[k-1],std::shared_ptr<const PlacementActionRequest>{});
+            auto receipt=std::atomic_load(&placementAcks[k-1]);
+            if(receipt&&receipt!=savedPlacement[k-1]){
+                auto path=dir/(name+L"-ack-"+std::to_wstring(GetCurrentProcessId())+L".bin"),temp=path;temp+=L".tmp";
+                std::ofstream output(temp,std::ios::binary);output.write(reinterpret_cast<const char*>(receipt.get()),sizeof *receipt);output.close();
+                if(MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING))savedPlacement[k-1]=receipt;
+            }
+        }
+        ScrapCreditRequest scrapPacket{};
+        std::ifstream scrapFile(dir/(L"native-scrap-credit-request-"+std::to_wstring(GetCurrentProcessId())+L".bin"),std::ios::binary);
+        scrapFile.read(reinterpret_cast<char*>(&scrapPacket),sizeof scrapPacket);
+        if(scrapFile&&scrapFile.peek()==EOF)std::atomic_store(&scrapCreditRequest,std::make_shared<const ScrapCreditRequest>(scrapPacket));
+        else std::atomic_store(&scrapCreditRequest,std::shared_ptr<const ScrapCreditRequest>{});
+        auto scrapReceipt=std::atomic_load(&scrapCreditAck);
+        if(scrapReceipt&&scrapReceipt!=savedScrap){
+            auto path=dir/(L"native-scrap-credit-ack-"+std::to_wstring(GetCurrentProcessId())+L".bin"),temp=path;temp+=L".tmp";
+            std::ofstream output(temp,std::ios::binary);output.write(reinterpret_cast<const char*>(scrapReceipt.get()),sizeof *scrapReceipt);output.close();
+            if(MoveFileExW(temp.c_str(),path.c_str(),MOVEFILE_REPLACE_EXISTING))savedScrap=scrapReceipt;
+        }
         NativeShadowBinding shadowPacket{};
         std::ifstream shadowFile(dir/(L"native-shadow-request-"+std::to_wstring(GetCurrentProcessId())+L".bin"),std::ios::binary);
         shadowFile.read(reinterpret_cast<char*>(&shadowPacket),sizeof shadowPacket);

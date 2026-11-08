@@ -180,6 +180,7 @@ final class OriginalWorldRenderer {
                 var effects=frame.getAsJsonArray("effects");if(effects.size()>128)throw new IllegalArgumentException("models bound");
                 for(var item:effects){
                     var effect=item.getAsJsonObject();String name=effect.get("mesh").getAsString();var at=vector(effect.getAsJsonArray("at"));
+                    if(name.equals("winston-tesla")&&effect.has("launch"))at=NativeMuzzleOrigins.at(effect.get("launch").getAsString(),at);
                     float alpha=effect.has("alpha")?effect.get("alpha").getAsFloat():1;
                     if(effect.has("to"))drew|=beam(ctx,name,at,vector(effect.getAsJsonArray("to")),effect.get("width").getAsFloat(),alpha);
                     else{

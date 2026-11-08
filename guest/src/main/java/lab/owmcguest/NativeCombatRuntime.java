@@ -43,7 +43,7 @@ public final class NativeCombatRuntime {
     public static long accept(MinecraftServer server,UUID player,long expectedWorld,long nativeModel,Batch batch){
         var p=server.getPlayerManager().getPlayer(player);
         if(p==null||!p.isAlive()||NativeWorldIdentity.of(server,p.getWorld().getRegistryKey())!=expectedWorld)throw new IllegalArgumentException("server world/player changed");
-        if(owner!=null&&(!owner.equals(player)||worldId!=expectedWorld||modelId!=nativeModel)){simulation.clear();flashes.clear();flashSource=null;flashModels=null;HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();}
+        if(owner!=null&&(!owner.equals(player)||worldId!=expectedWorld||modelId!=nativeModel)){simulation.clear();flashes.clear();flashSource=null;flashModels=null;HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();TorbRivetPresentation.reset();MeiIciclePresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();}
         owner=player;worldId=expectedWorld;modelId=nativeModel;if(!batch.entries().isEmpty())lastBatch=batch;
         for(var entry:batch.entries())if(entry.shot()!=null)lastShot=entry.shot();
         if(!batch.source().equals(flashSource)){flashModels=null;flashes.clear();HanzoSonicArrowRuntime.resetSession();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();flashSource=batch.source();}
@@ -51,6 +51,7 @@ public final class NativeCombatRuntime {
         var sonicScope=new HanzoSonicArrowState.Scope(owner,worldId,batch.source().hostGeneration(),modelId);
         for(var shot:simulation.admissions())HanzoSonicArrowRuntime.admit(server,sonicScope,shot);
         for(var shot:simulation.admissions())PharahBarragePresentation.launch(shot);
+        for(var shot:simulation.admissions())RoadhogServer.INSTANCE.admitted(shot);
         for(var shot:simulation.admissions())if(shot.rocket()||shot.helix()){if(flashes.size()>=16)flashes.removeFirst();flashes.addLast(shot);}
         for(var shot:simulation.admissions())if(shot.effect()!=null&&shot.effect().kind()==2)flashbangCue=new Cue(owner,worldId,batch.source(),shot);
         tick(server);return cursor;
@@ -64,11 +65,21 @@ public final class NativeCombatRuntime {
         if(p!=null&&p.isAlive()&&NativeWorldIdentity.of(server,p.getWorld().getRegistryKey())==worldId){
             var world=p.getServerWorld();
             simulation.tick(new NativeShotSimulation.WorldAccess(){
+                public void split(Shot parent,Vec at){
+                    if(lastBatch!=null)RoadhogSplitCues.INSTANCE.emit(new RoadhogPresentation.Scope(owner,worldId,modelId,lastBatch.source()),parent,at,System.currentTimeMillis());
+                }
                 public void impact(Shot shot,NativeShotSimulation.Hit hit){
                     if(lastBatch!=null&&HanzoSonicArrowRuntime.isSonic(shot))HanzoSonicArrowRuntime.impact(server,
                         new HanzoSonicArrowState.Scope(owner,worldId,lastBatch.source().hostGeneration(),modelId),shot,hit);
                 }
+                public void present(Shot shot,Vec from,Vec to,NativeShotSimulation.Hit hit,double begin,double finish){
+                    present(shot,from,to,hit);
+                    if(lastBatch!=null)TorbRivetPresentation.segment(new TorbRivetPresentation.Scope(owner,worldId,modelId,lastBatch.source()),shot,from,to,hit,begin,finish,System.currentTimeMillis());
+                    if(lastBatch!=null)RoadhogPresentation.segment(new RoadhogPresentation.Scope(owner,worldId,modelId,lastBatch.source()),shot,from,to,hit,begin,finish,System.currentTimeMillis());
+                    if(lastBatch!=null)MeiIciclePresentation.segment(new MeiIciclePresentation.Scope(owner,worldId,modelId,lastBatch.source()),shot,from,to,hit,begin,finish,System.currentTimeMillis(),server.getTicks());
+                }
                 public void present(Shot shot,Vec from,Vec to,NativeShotSimulation.Hit hit){
+                    if(hit!=null)MuzzlePresentation.contact(shot.identity(),hit.point());
                     if(lastBatch!=null)HanzoArrowPresentation.segment(new HanzoArrowPresentation.Scope(owner,worldId,modelId,lastBatch.source()),shot,from,to,hit,server.getTicks());
                     if(shot.beam()&&lastBatch!=null){
                         var start=point(from);var end=point(to);
@@ -80,7 +91,10 @@ public final class NativeCombatRuntime {
                         }
                         if(beamModels[0]==null)beamModels[0]=OriginalEffectFrames.frame(owner,worldId,lastBatch.source().hostGeneration(),modelId,shot.wallMs());
                         beamModels[0].addProperty("wall",Math.min(beamModels[0].get("wall").getAsLong(),shot.wallMs()));
-                        if(beamModels[0].getAsJsonArray("effects").size()<128)OriginalEffectFrames.beam(beamModels[0],"winston-tesla",start,end,.08f,.8f);
+                        if(beamModels[0].getAsJsonArray("effects").size()<128){
+                            OriginalEffectFrames.beam(beamModels[0],"winston-tesla",start,end,.08f,.8f);
+                            var effects=beamModels[0].getAsJsonArray("effects");effects.get(effects.size()-1).getAsJsonObject().addProperty("launch",shot.identity());
+                        }
                     }
                 }
                 public Vec aim(Shot shot){return NativeVisorRuntime.aim(p,worldId,lastBatch.source(),shot);}
@@ -98,6 +112,9 @@ public final class NativeCombatRuntime {
                         hits.add(new NativeShotSimulation.Hit(blocked,blocked?0:entity.getId(),vector(blocked?wall.getPos():target)));
                     }
                     return hits;
+                }
+                public NativeShotSimulation.Hit trace(Shot shot,Vec a,Vec b){
+                    return WinstonServer.INSTANCE.blockNative(world,p.getUuid(),shot,a,b,trace(a,b));
                 }
                 public NativeShotSimulation.Hit trace(Vec a,Vec b){
                     var start=point(a);var end=point(b);
@@ -122,7 +139,15 @@ public final class NativeCombatRuntime {
                     NativeUltimateRuntime.credit(result.healthLost());return result.healthLost();
                 }
                 public double beamDamage(NativeShotSimulation.Hit hit,double amount){
-                    var result=NativeDamageTargets.beamDamage(world,NativeDamageTargets.resolve(world,(int)hit.target()),p,amount);
+                    var entity=NativeDamageTargets.resolve(world,(int)hit.target());
+                    var target=entity==null?null:NativeDamageTargets.owner(entity);
+                    var position=target==null?null:target.getPos();var velocity=target==null?null:target.getVelocity();
+                    var result=NativeDamageTargets.beamDamage(world,entity,p,amount);
+                    // Tesla damage has no impulse. Preserve pre-hit motion and
+                    // real teleport/removal reactions, including multipart owners.
+                    if(target!=null&&target.isAlive()&&!target.isRemoved()&&target.getWorld()==world&&target.getPos().squaredDistanceTo(position)<1e-8){
+                        target.setVelocity(velocity);target.velocityModified=true;
+                    }
                     NativeUltimateRuntime.credit(result.healthLost());return result.healthLost();
                 }
                 public double explode(Shot shot,NativeShotSimulation.Hit hit){
@@ -143,10 +168,14 @@ public final class NativeCombatRuntime {
                     var entity=NativeDamageTargets.resolve(world,(int)hit.target());
                     boolean spray=NativeMeiFreezeRuntime.spray(shot);
                     var beforePosition=entity==null?null:entity.getPos();var beforeVelocity=entity==null?null:entity.getVelocity();
-                    var result=NativeDamageTargets.projectileDamage(world,entity,p,shot.nativeDamage()*NativeShotSimulation.HP_SCALE);
+                    var result=NativeDamageTargets.projectileDamage(world,entity,p,RoadhogRules.nativeDamage(shot,hit.point())*NativeShotSimulation.HP_SCALE);
                     // Continuous frost is not an ordinary MC bullet impulse.
                     // Preserve real teleport/removal reactions and existing motion.
                     if(spray&&entity!=null&&entity.isAlive()&&!entity.isRemoved()&&entity.getWorld()==world&&entity.getPos().squaredDistanceTo(beforePosition)<1e-8){entity.setVelocity(beforeVelocity);entity.velocityModified=true;}
+                    if(RoadhogRules.wholeHog(shot)&&result.applied()&&entity!=null&&entity.isAlive()&&!entity.isRemoved()&&entity.getWorld()==world&&entity.getPos().squaredDistanceTo(beforePosition)<1e-8){
+                        var impulse=RoadhogRules.knockback(vector(entity.getVelocity()),shot.velocity());entity.setVelocity(point(impulse));entity.velocityModified=true;
+                    }
+                    RoadhogServer.INSTANCE.weaponReceipt(shot,result);
                     NativeUltimateRuntime.credit(result.healthLost());
                     if(result.applied()&&lastBatch!=null)NativeMeiFreezeRuntime.contact(p,worldId,modelId,lastBatch.source().hostGeneration(),shot,entity);
                     return result.healthLost();
@@ -175,7 +204,11 @@ public final class NativeCombatRuntime {
         out.addProperty("dashResetsApplied",NativeEliminationRuntime.applied);
         // Only actual admitted factory flights supply these cosmetic views.
         long visualNow=System.currentTimeMillis();flashes.removeIf(s->visualNow-s.wallMs()>180||visualNow<s.wallMs());
+        out.addProperty("roadhogSplits",simulation.roadhogSplits);out.addProperty("roadhogDerivedPellets",simulation.roadhogDerivedPellets);
         rocketView=p!=null&&owner!=null&&lastBatch!=null?new RocketView(worldId,owner,lastBatch.source(),modelId,simulation.activeProjectiles().stream().filter(s->s.rocket()||s.barrage()||s.helix()||s.tankShell()).toList(),java.util.List.copyOf(flashes)):null;
+        if(p!=null&&owner!=null&&lastBatch!=null)TorbRivetPresentation.publish(new TorbRivetPresentation.Scope(owner,worldId,modelId,lastBatch.source()),simulation.activeProjectiles(),visualNow);
+        if(p!=null&&owner!=null&&lastBatch!=null)MeiIciclePresentation.publish(new MeiIciclePresentation.Scope(owner,worldId,modelId,lastBatch.source()),simulation.activeProjectiles(),visualNow,server.getTicks());
+        if(p!=null&&owner!=null&&lastBatch!=null)RoadhogPresentation.publish(new RoadhogPresentation.Scope(owner,worldId,modelId,lastBatch.source()),visualNow);
         if(p!=null&&owner!=null&&lastBatch!=null)HanzoArrowPresentation.publish(new HanzoArrowPresentation.Scope(owner,worldId,modelId,lastBatch.source()),simulation.activeProjectiles(),server.getTicks(),visualNow);
         if(p!=null&&owner!=null&&lastBatch!=null){PharahBarragePresentation.publish(worldId,owner,lastBatch.source(),modelId,visualNow);PharahRocketImpacts.publish(worldId,owner,lastBatch.source(),modelId,visualNow);PharahConcussiveBursts.publish(worldId,owner,lastBatch.source(),modelId,visualNow);}else{PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();}
         out.addProperty("barragePresentationLaunches",PharahBarragePresentation.admitted);out.addProperty("barragePresentationImpacts",PharahBarragePresentation.detonated);
@@ -188,6 +221,7 @@ public final class NativeCombatRuntime {
         out.addProperty("helixModelsShown",helixModelsShown);out.addProperty("helixRenderFrames",helixRenderFrames);
         out.addProperty("tankShellModelsShown",tankShellModelsShown);out.addProperty("tankShellRenderFrames",tankShellRenderFrames);
         out.addProperty("tankShellPresentation","restored-silver-shell/MC-size-and-speed-adapter; composed pixels pending");
+        out.addProperty("meiIcicleModel","original108b/2817");out.addProperty("meiIcicleTraced",MeiIciclePresentation.traced);
         out.addProperty("pharahVisualError",rocketVisualsError);
         out.addProperty("originalEffectGraph",false);
         out.addProperty("projectileEntitiesSpawned",0);
@@ -202,6 +236,6 @@ public final class NativeCombatRuntime {
             &&visualNow>=flashModels.get("wall").getAsLong()&&visualNow-flashModels.get("wall").getAsLong()<=200)out.add("models",flashModels);
         NativeCombatScene.addStatus(server,out);status=out.toString();
     }
-    public static void close(){HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();concussiveView=null;NativeConcussiveRuntime.resetSession();flashbangCue=null;flashbangView=null;NativeFlashbangRuntime.resetSession();NativeDeadeyeRuntime.resetSession();NativeBuildersLab.cleanup();NativeCombatScene.cleanup();OptionalMultipartTargets.reset();simulation.clear();owner=null;lastBatch=null;rocketView=null;flashes.clear();flashSource=null;flashModels=null;}
-    public static void resetSession(){HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();concussiveView=null;NativeConcussiveRuntime.resetSession();flashbangCue=null;flashbangView=null;rocketView=null;simulation.clear();owner=null;worldId=0;lastBatch=null;lastShot=null;flashes.clear();flashSource=null;flashModels=null;status="{\"admitted\":0,\"rejected\":0,\"duplicates\":0,\"blockHits\":0,\"entityHits\":0,\"damageApplied\":0.0,\"active\":false,\"cursor\":0}";}
+    public static void close(){HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();TorbRivetPresentation.reset();MeiIciclePresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();concussiveView=null;NativeConcussiveRuntime.resetSession();flashbangCue=null;flashbangView=null;NativeFlashbangRuntime.resetSession();NativeDeadeyeRuntime.resetSession();NativeBuildersLab.cleanup();NativeCombatScene.cleanup();OptionalMultipartTargets.reset();simulation.clear();owner=null;lastBatch=null;rocketView=null;flashes.clear();flashSource=null;flashModels=null;}
+    public static void resetSession(){HanzoSonicArrowRuntime.resetSession();HanzoArrowPresentation.reset();TorbRivetPresentation.reset();MeiIciclePresentation.reset();PharahBarragePresentation.reset();PharahRocketImpacts.reset();PharahConcussiveBursts.reset();concussiveView=null;NativeConcussiveRuntime.resetSession();flashbangCue=null;flashbangView=null;rocketView=null;simulation.clear();owner=null;worldId=0;lastBatch=null;lastShot=null;flashes.clear();flashSource=null;flashModels=null;status="{\"admitted\":0,\"rejected\":0,\"duplicates\":0,\"blockHits\":0,\"entityHits\":0,\"damageApplied\":0.0,\"active\":false,\"cursor\":0}";}
 }

@@ -28,9 +28,11 @@ public final class NativeVenomRuntime {
     static final double SPEED=20/20.0,GRAVITY=9.8/400.0,TRIGGER=3.0,NATIVE_TOTAL=75;
     static final int POISON_TICKS=100,FLIGHT_TICKS=100;
     private static final DustParticleEffect PURPLE=new DustParticleEffect(new Vector3f(.55f,.1f,.75f),1.2f);
-    private static final class Mine{Scope scope;Vec3d pos,vel,normal=new Vec3d(0,1,0);boolean stuck,spider;int age;float yaw;}
+    private static final class Mine{Scope scope;Vec3d pos,vel,normal=new Vec3d(0,1,0);boolean stuck,spider;int age;float yaw;String visualId="";}
     /** Presentation snapshot for the client renderer (original mesh). */
-    public record View(UUID owner,long world,Vec3d at,Vec3d normal,boolean stuck,float yaw,int age,long wall,boolean spider){}
+    public record View(UUID owner,long world,Vec3d at,Vec3d normal,boolean stuck,float yaw,int age,long wall,boolean spider,String visualId){
+        public View(UUID owner,long world,Vec3d at,Vec3d normal,boolean stuck,float yaw,int age,long wall,boolean spider){this(owner,world,at,normal,stuck,yaw,age,wall,spider,"");}
+    }
     public static volatile View view;
     /** Independent outline contribution; never changes a target's glowing flag or potion effects. */
     public record Revealed(UUID uuid,int ticksRemaining){}
@@ -53,8 +55,12 @@ public final class NativeVenomRuntime {
     }
     /** One original throw: called once per fresh node1 tick. */
     public static void cast(MinecraftServer server,Scope scope){
+        cast(server,scope,"");
+    }
+    public static void cast(MinecraftServer server,Scope scope,String visualId){
         var p=owner(server,scope);if(p==null)return;
         var m=new Mine();m.scope=scope;m.pos=p.getEyePos().add(p.getRotationVec(1).multiply(.5));m.vel=p.getRotationVec(1).multiply(SPEED);m.yaw=p.getYaw();
+        m.visualId=visualId;
         m.spider=p.getRandom().nextBoolean();if(m.spider)spiderRolls++;else mineRolls++;
         mine=m;throwsAdmitted++;publish();
     }
@@ -161,7 +167,7 @@ public final class NativeVenomRuntime {
         }
     }
     private static void publish(){
-        view=mine==null?null:new View(mine.scope.owner(),mine.scope.world(),mine.pos,mine.normal,mine.stuck,mine.yaw,mine.age,System.currentTimeMillis(),mine.spider);
+        view=mine==null?null:new View(mine.scope.owner(),mine.scope.world(),mine.pos,mine.normal,mine.stuck,mine.yaw,mine.age,System.currentTimeMillis(),mine.spider,mine.visualId);
         var o=new JsonObject();o.addProperty("mine",mine!=null);o.addProperty("stuck",mine!=null&&mine.stuck);o.addProperty("throws",throwsAdmitted);
         o.addProperty("stuckCount",stuckCount);o.addProperty("detonations",detonations);o.addProperty("poisonHits",poisonHits);o.addProperty("expired",expired);
         o.addProperty("damageApplied",damageApplied);o.addProperty("poisoned",poisoned.size());

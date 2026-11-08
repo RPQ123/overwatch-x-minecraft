@@ -48,7 +48,7 @@ public final class NativeShotProtocol {
         if(json.length()>524288)throw new IllegalArgumentException("journal size");
         var root=JsonParser.parseString(json).getAsJsonObject();
         int probeVersion=root.get("probeVersion").getAsInt();
-        if(root.get("protocol").getAsInt()!=3||(probeVersion!=11&&probeVersion!=12&&probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16)||number(root,"pid")!=Integer.toUnsignedLong(expected.nativePid)
+        if(root.get("protocol").getAsInt()!=3||(probeVersion!=11&&probeVersion!=12&&probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16&&probeVersion!=17)||number(root,"pid")!=Integer.toUnsignedLong(expected.nativePid)
            ||number(root,"hostGeneration")!=expected.hostGeneration||!root.get("enabled").getAsBoolean()||root.get("failures").getAsInt()!=0||root.get("overflow").getAsBoolean())throw new IllegalArgumentException("source identity/status");
         long heartbeat=number(root,"heartbeat"),creation=number(root,"creation"),epoch=number(root,"epoch");
         if(creation<=0||epoch<=0||now-heartbeat>500||heartbeat-now>100)throw new IllegalArgumentException("source freshness");
@@ -76,7 +76,7 @@ public final class NativeShotProtocol {
                 if(generic){
                     long hero=number(e,"hero"),volley=number(e,"volley"),tick=number(e,"tick"),shot=number(e,"shot"),pellet=number(e,"pellet");
                     if(expected.hero()!=0&&hero!=expected.hero())throw new IllegalArgumentException("shot departed native hero");
-                    if(!java.util.Set.of(2L,3L,5L,6L,8L,10L,0x15L,0x29L,0x42L,0x65L,0x6eL,0xddL).contains(hero&0xffffL)||(hero&~0xffffL)!=0x02e0000000000000L
+                    if(!java.util.Set.of(2L,3L,5L,6L,8L,10L,0x15L,0x29L,0x42L,0x65L,0x6eL,0xddL,0x40L).contains(hero&0xffffL)||(hero&~0xffffL)!=0x02e0000000000000L
                        ||e.get("flags").getAsInt()!=313||entity!=0||(resource>>>48)!=0x0400||volley==0||tick<=0||tick>0xffffffffL||shot>65535||pellet>255
                        ||(e.get("status").getAsInt()!=0&&e.get("status").getAsInt()!=8)||e.get("factoryType").getAsInt()<1||e.get("factoryType").getAsInt()>3||e.get("flight").getAsInt()<0||e.get("flight").getAsInt()>1)throw new IllegalArgumentException("native armory proof");
                     nativeEye=scalar(e,"eyeHeight");double gravity=scalar(e,"gravity"),splash=scalar(e,"splashDamage"),radius=scalar(e,"outerRadius"),fuse=scalar(e,"fuse"),terrain=scalar(e,"terrain");int code=e.get("effect").getAsInt(),bounces=e.get("bounces").getAsInt();
@@ -102,16 +102,23 @@ public final class NativeShotProtocol {
                 if(offset.lengthSquared()>64||damage<=0||damage>10000||expected.eyeHeight<.1||expected.eyeHeight>3)throw new IllegalArgumentException("shot numeric bounds");
                 if(generic){
                     if(range<=0||range>512||(hitscan?(lifetime!=0||velocity.lengthSquared()<.99||velocity.lengthSquared()>1.01):(lifetime<=0||lifetime>120||velocity.lengthSquared()<.01||velocity.lengthSquared()>1000000)))throw new IllegalArgumentException("armory flight bounds");
-                    if(effect.kind()==2&&((probeVersion!=12&&probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16)||effect.hero()!=0x02e0000000000042L||resource!=0x040000000000037dL||hitscan||Math.abs(velocity.lengthSquared()-900)>.1||lifetime!=5||range!=7||damage!=25||effect.gravity()!=20||effect.radius()!=3||effect.splash()!=0||effect.bounces()!=0||effect.fuse()!=0||effect.terrain()!=0))throw new IllegalArgumentException("uncalibrated native Flashbang");
-                    if(effect.kind()==3&&((probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16)||effect.hero()!=0x02e0000000000008L||resource!=0x040000000000010fL||hitscan||Math.abs(velocity.lengthSquared()-3600)>.1||lifetime!=5||range!=100||damage!=1||effect.gravity()!=0||effect.radius()!=8||effect.splash()!=0||effect.bounces()!=0||effect.fuse()!=0||effect.terrain()!=0))throw new IllegalArgumentException("uncalibrated native Concussive Blast");
+                    if(effect.kind()==2&&((probeVersion!=12&&probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16&&probeVersion!=17)||effect.hero()!=0x02e0000000000042L||resource!=0x040000000000037dL||hitscan||Math.abs(velocity.lengthSquared()-900)>.1||lifetime!=5||range!=7||damage!=25||effect.gravity()!=20||effect.radius()!=3||effect.splash()!=0||effect.bounces()!=0||effect.fuse()!=0||effect.terrain()!=0))throw new IllegalArgumentException("uncalibrated native Flashbang");
+                    if(effect.kind()==3&&((probeVersion!=13&&probeVersion!=14&&probeVersion!=15&&probeVersion!=16&&probeVersion!=17)||effect.hero()!=0x02e0000000000008L||resource!=0x040000000000010fL||hitscan||Math.abs(velocity.lengthSquared()-3600)>.1||lifetime!=5||range!=100||damage!=1||effect.gravity()!=0||effect.radius()!=8||effect.splash()!=0||effect.bounces()!=0||effect.fuse()!=0||effect.terrain()!=0))throw new IllegalArgumentException("uncalibrated native Concussive Blast");
+                    if(effect.hero()==RoadhogRules.HERO){
+                        if(probeVersion!=17||effect.kind()!=0||effect.gravity()!=0||effect.splash()!=0||effect.radius()!=0
+                           ||effect.bounces()!=0||effect.fuse()!=0||effect.terrain()!=0
+                           ||!RoadhogRules.factory(resource,e.get("factoryType").getAsInt(),e.get("status").getAsInt(),hitscan,velocity.lengthSquared(),lifetime,range,damage))
+                            throw new IllegalArgumentException("uncalibrated native Roadhog factory");
+                    }else if(resource==RoadhogRules.SCRAP||resource==RoadhogRules.SECONDARY||resource==RoadhogRules.WHOLE_HOG)
+                        throw new IllegalArgumentException("Roadhog resource/hero mismatch");
                     // Resource-specific calibration prevents another armory or
                     // older producer from borrowing Tank blast presentation.
-                    if(resource==0x04000000000003ceL&&(probeVersion!=16||effect.hero()!=0x02e0000000000015L||hitscan||effect.kind()!=1
+                    if(resource==0x04000000000003ceL&&((probeVersion!=16&&probeVersion!=17)||effect.hero()!=0x02e0000000000015L||hitscan||effect.kind()!=1
                         ||e.get("status").getAsInt()!=8||e.get("factoryType").getAsInt()!=1||Math.abs(velocity.lengthSquared()-3600)>.1
                         ||lifetime!=5||range!=100||damage!=50||effect.gravity()!=0||effect.splash()!=140||effect.innerRadius()!=1||effect.radius()!=4
                         ||Math.abs(effect.outerScale()-.30000001192092896)>1e-6||effect.terrain()!=0||effect.bounces()!=0||effect.fuse()!=0))throw new IllegalArgumentException("uncalibrated native Tank shell");
                     if((resource==0x0400000000000149L||resource==0x040000000000020dL)
-                        &&(probeVersion!=16||effect.hero()!=HanzoSonicArrowState.HERO||hitscan||effect.kind()!=0
+                        &&((probeVersion!=16&&probeVersion!=17)||effect.hero()!=HanzoSonicArrowState.HERO||hitscan||effect.kind()!=0
                         ||e.get("status").getAsInt()!=8||e.get("factoryType").getAsInt()!=1
                         ||lifetime!=5||range!=100||damage<25||damage>125
                         ||velocity.lengthSquared()<625-.1||velocity.lengthSquared()>8100+.1
@@ -126,7 +133,7 @@ public final class NativeShotProtocol {
                     if(velocity.lengthSquared()<.99||velocity.lengthSquared()>1.01||range!=100||damage!=70||lifetime!=0)throw new IllegalArgumentException("uncalibrated native hitscan");
                 }else if(velocity.lengthSquared()<.01||velocity.lengthSquared()>1000000||lifetime<=0||lifetime>120)throw new IllegalArgumentException("projectile numeric bounds");
                 if(e.has("waves")){
-                    if(!generic||(probeVersion!=14&&probeVersion!=15&&probeVersion!=16)||effect.hero()!=0x02e0000000000008L||resource!=0x0400000000000052L||hitscan||effect.kind()!=1||damage!=10||lifetime!=5||range!=100||Math.abs(velocity.lengthSquared()-2025)>.1||effect.gravity()!=0||effect.splash()!=30||effect.innerRadius()!=.5||effect.radius()!=1.5||Math.abs(effect.outerScale()-.3)>1e-6||effect.terrain()!=0||effect.bounces()!=0||effect.fuse()!=0)throw new IllegalArgumentException("uncalibrated native Barrage");
+                    if(!generic||(probeVersion!=14&&probeVersion!=15&&probeVersion!=16&&probeVersion!=17)||effect.hero()!=0x02e0000000000008L||resource!=0x0400000000000052L||hitscan||effect.kind()!=1||damage!=10||lifetime!=5||range!=100||Math.abs(velocity.lengthSquared()-2025)>.1||effect.gravity()!=0||effect.splash()!=30||effect.innerRadius()!=.5||effect.radius()!=1.5||Math.abs(effect.outerScale()-.3)>1e-6||effect.terrain()!=0||effect.bounces()!=0||effect.fuse()!=0)throw new IllegalArgumentException("uncalibrated native Barrage");
                     var a=e.getAsJsonArray("waves");if(a.size()!=2)throw new IllegalArgumentException("Barrage wave count");
                     for(int i=0;i<2;i++){
                         var w=a.get(i).getAsJsonObject();double start=scalar(w,"start"),fade=scalar(w,"fade"),phase=scalar(w,"phase"),freq=scalar(w,"frequency"),mag=scalar(w,"magnitude"),rot=scalar(w,"rotation");boolean spiral=w.get("spiral").getAsBoolean();

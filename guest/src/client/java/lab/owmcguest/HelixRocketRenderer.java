@@ -19,9 +19,10 @@ final class HelixRocketRenderer {
         {-.052893832f,.13169499f,.009406159f},{.12852736f,.14529651f,.023515388f}};
     private static Vec3d vec(NativeShotProtocol.Vec v){return new Vec3d(v.x(),v.y(),v.z());}
     private static Vec3d position(NativeShotProtocol.Shot shot,Frame f,double age,int index){
-        var direction=vec(shot.velocity()).normalize();var orbit=HelixPresentation.strand(age,index);var offset=HelixPresentation.launch(age,f.fov(),f.aspect());
-        return vec(shot.start()).add(vec(shot.velocity()).multiply(age)).add(direction.multiply(offset.forward()))
-            .add(vec(f.basis().right()).multiply(offset.right()+orbit.x())).add(vec(f.basis().up()).multiply(offset.up()+orbit.y()));
+        var orbit=HelixPresentation.strand(age,index);
+        var actual=vec(shot.start()).add(vec(shot.velocity()).multiply(age))
+            .add(vec(f.basis().right()).multiply(orbit.x())).add(vec(f.basis().up()).multiply(orbit.y()));
+        return NativeMuzzleOrigins.at(shot.identity(),actual);
     }
     static void register(){WorldRenderEvents.AFTER_ENTITIES.register(ctx->{
         var c=MinecraftClient.getInstance();var h=HostPoseReader.INSTANCE.latest();var s=NativeCombatRuntime.rocketView;

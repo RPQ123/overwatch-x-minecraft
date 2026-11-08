@@ -27,7 +27,10 @@ public final class NativeJunkratRuntime {
     public enum Kind{GRENADE,MINE,TRAP,DEATH_BOMB}
     public record Scope(UUID owner,long world,long source,long model){}
     private static final class Body{Kind kind;Scope scope;Vec3d pos,vel;boolean stuck;int age,bounces,firstGroundAge=-1;UUID trapped;int trappedAt;int nativePid;long nativeTick;}
-    public record View(Kind kind,Vec3d at,boolean stuck,int age,long world,long wall){}
+    public record View(Kind kind,Vec3d at,boolean stuck,int age,long world,long wall,String visualId){
+        public View(Kind kind,Vec3d at,boolean stuck,int age,long world,long wall){this(kind,at,stuck,age,world,wall,"");}
+    }
+    public static String visualId(int pid,long tick,Kind kind){return "junk:"+pid+":"+tick+":"+kind;}
     static final double G_GRENADE=9.8/400,G_THROWN=20/400.0,RESTITUTION=.5,DIRECT=40,BLAST=80,INNER=.5,OUTER=2,OUTER_SCALE=.125,TRAP_DAMAGE=80;
     static final int DEATH_FUSE=50,TRAP_ROOT=30,MAX_BODIES=32;
     private static final List<Body> bodies=new ArrayList<>();
@@ -179,7 +182,7 @@ public final class NativeJunkratRuntime {
         }
     }
     private static void publish(){
-        var v=new ArrayList<View>();for(var b:bodies)v.add(new View(b.kind,b.pos,b.stuck,b.age,b.scope.world(),System.currentTimeMillis()));views=List.copyOf(v);
+        var v=new ArrayList<View>();for(var b:bodies)v.add(new View(b.kind,b.pos,b.stuck,b.age,b.scope.world(),System.currentTimeMillis(),visualId(b.nativePid,b.nativeTick,b.kind)));views=List.copyOf(v);
         var o=new JsonObject();o.addProperty("bodies",bodies.size());o.addProperty("grenades",grenades);o.addProperty("mines",mines);o.addProperty("traps",traps);
         o.addProperty("explosions",explosions);o.addProperty("directHits",directHits);o.addProperty("blastHits",blastHits);o.addProperty("trapTriggers",trapTriggers);
         o.addProperty("detonations",detonations);o.addProperty("damageApplied",damageApplied);status=o.toString();

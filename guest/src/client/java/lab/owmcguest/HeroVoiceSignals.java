@@ -13,6 +13,7 @@ final class HeroVoiceSignals {
     private final HeroVoicePolicy.IceWall iceWall=new HeroVoicePolicy.IceWall();
     private final HeroVoiceHanzoBegin hanzoBegin=new HeroVoiceHanzoBegin();
     private final HeroVoiceUltimateSignals ultimates=new HeroVoiceUltimateSignals();
+    private final WinstonAudioGate winston=new WinstonAudioGate();
     private String iceWallStatus="{}";
     private JsonObject counterStatus=new JsonObject(); // 语音挂接：失败时也可核对生产者原始计数。
     private long iceWallViewSamples,iceWallFreshSamples;
@@ -62,7 +63,7 @@ final class HeroVoiceSignals {
         readyStatus.addProperty("model",b.model());readyStatus.addProperty("world",b.world());readyStatus.addProperty("source",b.source());
         readyStatus.addProperty("hasClip",voice.hasClip(name,"ult_ready"));counterStatus.add("ultReady",readyStatus);
         if(crossed)voice.emit("ult_ready",++sequence,"native:charge-unfull-to-full","");
-        var ultimate=ultimates.observe(host,b);counterStatus.add("ultBegin",ultimates.status());
+        var ultimate=name.equals("winston")?null:ultimates.observe(host,b);counterStatus.add("ultBegin",ultimates.status());
         if(ultimate!=null)voice.emit("ult_cast",ultimate.tick(),ultimate.signal(),"");
         switch(name){
             // 语音挂接：该runtime仅爆炸后才首次发布detonations；初始{}确知是0，不能吞掉第一发。
@@ -127,6 +128,16 @@ final class HeroVoiceSignals {
                 count("ability:chain_hook_hit",RoadhogServer.INSTANCE.status(),"hookHits","hook-hit");
                 count("ability:take_a_breather",RoadhogServer.INSTANCE.status(),"healCasts","breather");
             }
+            case "winston" -> {
+                var sample=WinstonServer.INSTANCE.audio;
+                var observed=winston.observe(sample,new WinstonAudioGate.Scope(b.player(),b.world(),b.source(),b.model()),System.currentTimeMillis());
+                if(observed.contains(WinstonAudioGate.Event.TAKEOFF))voice.emit("ability:jump_pack",sample.jumpAck(),"native:winston-jump-ack","");
+                if(observed.contains(WinstonAudioGate.Event.THROW))voice.emit("ability:barrier",sample.barrierAck(),"native:winston-barrier-ack","");
+                if(observed.contains(WinstonAudioGate.Event.PRIMAL))voice.emit("ult_cast",sample.primalBegin(),"native:winston-primal-pool-committed","");
+                var report=new JsonObject();report.addProperty("events",observed.toString());report.addProperty("source","W2 native receipt / actual MC contact");
+                if(sample!=null){report.addProperty("jumpAck",sample.jumpAck());report.addProperty("barrierAck",sample.barrierAck());report.addProperty("primalBegin",sample.primalBegin());}
+                counterStatus.add("winston",report);
+            }
             case "symmetra" -> {
                 count("ability:sentry_turret",SymmetraServer.INSTANCE.status(),"turretBuilds","symmetra-turret");
             }
@@ -134,7 +145,7 @@ final class HeroVoiceSignals {
                 count("ability:amp_it_up",LucioServer.INSTANCE.status(),"ampCasts","amp");
                 count("ability:crossfade_switch",LucioServer.INSTANCE.status(),"songCommits","song");
             }
-            default -> { /* D.Va机甲/温斯顿/禅雅塔缺成功回执，不猜施法。 */ }
+            default -> { /* D.Va机甲/禅雅塔缺成功回执，不猜施法。 */ }
         }
     }
     private void sustain(long hero,String event){
@@ -162,6 +173,6 @@ final class HeroVoiceSignals {
     }
     String iceWallStatus(){return iceWallStatus;}
     String counterStatus(){return counterStatus.toString();}
-    void rebaseline(){edges.clear();phases.clear();meter.reset();hanzoBegin.rebaseline();ultimates.rebaseline();counterStatus=new JsonObject();} // 语音挂接：同身份短暂卡顿不丢待建墙。
+    void rebaseline(){edges.clear();phases.clear();meter.reset();hanzoBegin.rebaseline();ultimates.rebaseline();winston.reset();counterStatus=new JsonObject();} // 语音挂接：同身份短暂卡顿不丢待建墙。
     void reset(){rebaseline();hanzoBegin.close();ultimates.close();iceWall.reset();iceWallStatus="{}";iceWallViewSamples=iceWallFreshSamples=0;}
 }

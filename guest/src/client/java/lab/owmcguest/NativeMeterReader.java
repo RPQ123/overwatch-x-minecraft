@@ -7,6 +7,7 @@ import java.nio.file.*;
 /** Typed native meter feedback only; no code invocation or ability activation. */
 final class NativeMeterReader implements AutoCloseable {
     record State(double charge,double cost,int kind){}
+    record Scrap(int amount,long creation,long model){}
     private final NativeAbilityReader.Kernel kernel=Native.load("kernel32",NativeAbilityReader.Kernel.class);
     private Pointer handle;private JsonObject binding;private int pid;private long generation;
     String error="waiting for native meter binding";
@@ -53,6 +54,22 @@ final class NativeMeterReader implements AutoCloseable {
             verify();double charge=value("charge"),cost=value("cost");if(cost<=0||charge>cost)throw new IllegalArgumentException("native charge exceeds cost");
             error="";return new State(charge,cost,i(n("charge")+0xac));
         }catch(Exception failure){error=failure.toString();close();return null;}
+    }
+    /** Read the same entity variable bag already bound for the native meter.
+     * No write is performed here; the logic owner executes Scrap Set&Notify. */
+    Scrap scrap(){
+        if(handle==null||binding==null||n("hero")!=0x02e0000000000006L)throw new IllegalStateException("native Scrap owner unavailable");
+        verify();long primitive=0;
+        for(int bucket=0;bucket<16;bucket++){
+            var h=bytes(read(n("bag")+0xa0+bucket*0x30,16));long items=h.getLong();int count=h.getInt(),capacity=h.getInt();
+            if(count<0||count>capacity||capacity>512)throw new IllegalArgumentException("Scrap bag bounds");
+            if(count==0)continue;var pairs=bytes(read(items,count*16));
+            for(int j=0;j<count;j++)if(pairs.getLong(j*16)==0x0d80000000000409L){if(primitive!=0)throw new IllegalArgumentException("duplicate Scrap variable");primitive=pairs.getLong(j*16+8);}
+        }
+        if(primitive==0||q(primitive)!=n("numericVtable")||q(primitive+0x80)!=n("bag")||q(primitive+0x98)!=0x0d80000000000409L)throw new IllegalArgumentException("Scrap variable identity");
+        var raw=bytes(read(primitive+0xa0,16));int kind=raw.getInt(12);double amount=kind==2?raw.getInt():kind==3?raw.getFloat():Double.NaN;
+        if(!Double.isFinite(amount)||amount<0||amount>200||amount!=Math.floor(amount))throw new IllegalArgumentException("Scrap value bounds");
+        verify();return new Scrap((int)amount,n("creation"),n("model"));
     }
     boolean credit(State expected,double wanted){
         synchronized(NativeMeterWrites.LOCK){

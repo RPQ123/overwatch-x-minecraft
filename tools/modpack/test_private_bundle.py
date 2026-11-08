@@ -69,30 +69,39 @@ class PrivateFixtures(unittest.TestCase):
         selected=private_assets.model_references(self.root,{'used','arrow-glow','unused','retired','torb-turret-2'})
         self.assertEqual(selected,{'used','arrow-glow','torb-turret-1','torb-turret-2','torb-turret-3'})
 
-    def test_catalog_requires_exactly_785_unique_rows(self):
-        path=self.file('guest/src/main/java/lab/owmcguest/HeroVoiceDefaultCatalog.java',
-                       '\n'.join(f'hero|kill|{i:032x}' for i in range(785)).encode())
-        self.assertEqual(len(private_assets.voice_catalog(self.root)),785)
-        path.write_text('hero|kill|'+'0'*32)
-        with self.assertRaisesRegex(ValueError,'785'):private_assets.voice_catalog(self.root)
+    def test_catalog_reads_default_and_certified_sfx_and_rejects_duplicates(self):
+        first, second, third = ('0'*32, '1'*32, '2'*32)
+        source = 'guest/src/main/java/lab/owmcguest/'
+        path = self.file(source+'HeroVoiceDefaultCatalog.java', f'DATA="""\nhero|kill|{first}\n""";'.encode())
+        self.file(source+'WinstonAudioCatalog.java', f'SFX=Map.of("sfx:jump","{second}");'.encode())
+        self.file(source+'RoadhogSoundCatalog.java', f'EVENT="sfx:split"; HASH="{third}";'.encode())
+        self.assertEqual(private_assets.voice_catalog(self.root),
+                         [('hero','kill',first),('winston','sfx:jump',second),('roadhog','sfx:split',third)])
+        path.write_text(f'DATA="""\nhero|kill|{second}\n""";', encoding='utf-8')
+        with self.assertRaisesRegex(ValueError,'重复'):private_assets.voice_catalog(self.root)
 
     def test_voice_copy_filters_the_catalog_and_validates_cached_receipts(self):
         builder=self.builder()
         paths=config.PackPaths(self.root,configuration=dict(schemaVersion=1,paths={'heroVoiceAssets':'voices','profile':'profile'}))
         cached='profile/resourcepacks/owmc-private-full-voice/assets/owmcguest/sounds/private/full/'
-        identity='0'*32;excluded='f'*32;pin='1'*64
+        identity='0'*32;direct='2'*32;excluded='f'*32;pin='1'*64
+        source=self.file('voices/ogg/direct.ogg',b'OggSdirect')
         config.write_json(self.root/'voices/manifest.json',{'entries':{
             identity:dict(hero='hero',event='kill',sha256=pin),
+            direct:dict(hero='winston',event='sfx:jump',format='ogg',file='ogg/direct.ogg',sha256=config.sha256(source)),
             excluded:dict(hero='hero',event='excluded',sha256=pin)}})
         ogg=self.file(cached+identity+'.ogg',b'OggSsynthetic')
         self.file(cached+excluded+'.ogg',b'OggSunselected')
         config.write_json(self.root/(cached+identity+'.json'),dict(sourceSha256=pin,oggSha256=config.sha256(ogg)))
         bundle=private_assets.PrivateBundle(builder,paths)
-        bundle.voices([('hero','kill',identity)])
-        self.assertEqual(bundle.summary['voiceClipsCopied'],1)
+        bundle.voices([('hero','kill',identity),('winston','sfx:jump',direct)])
+        self.assertEqual(bundle.summary['voiceClipsCopied'],2)
         self.assertFalse(any(excluded in p for p in builder.rows))
-        entry=config.read_json(builder.destination/(private_assets.VOICE_DIRECTORY+'/manifest.json'))['entries'][identity]
+        entries=config.read_json(builder.destination/(private_assets.VOICE_DIRECTORY+'/manifest.json'))['entries']
+        entry=entries[identity]
         self.assertEqual(entry['format'],'ogg');self.assertEqual(entry['originalMp3Sha256'],pin)
+        self.assertEqual(entries[direct]['sha256'],config.sha256(source))
+        self.assertNotIn('originalMp3Sha256',entries[direct])
         self.assertFalse(any(p.endswith('.mp3') or 'ffmpeg' in p for p in builder.rows))
 
     def test_missing_voice_keeps_an_unavailable_manifest_entry_for_runtime_degradation(self):
@@ -107,12 +116,20 @@ class PrivateFixtures(unittest.TestCase):
     def test_model_copy_only_uses_verified_provenance_files_and_skips_bad_group(self):
         builder=self.builder();paths=config.PackPaths(self.root)
         pack=self.file('model/pack.json',b'{}');texture=self.file('model/texture.png',b'synthetic')
+        config.write_json(pack,dict(winstonBarrierStyle={'privateRoot':'D:/author/winston-barrier-w5','visualMode':'mesh'}))
         self.file('model/unreferenced.raw')
-        config.write_json(self.root/'model/provenance.json',dict(files={'pack.json':config.sha256(pack),'texture.png':config.sha256(texture)}))
+        pins={'pack.json':config.sha256(pack),'texture.png':config.sha256(texture)}
+        config.write_json(self.root/'model/provenance.json',dict(files=pins))
         bundle=private_assets.PrivateBundle(builder,paths)
-        bundle.model('used',self.root/'model','private-assets/owmc-mesh/used',mesh=True)
+        bundle.model('winston-barrier-w5',self.root/'model','private-assets/owmc-mesh/used',mesh=True)
         self.assertEqual(bundle.summary['modelPacksCopied'],1)
         self.assertFalse(any(p.endswith('.raw') for p in builder.rows))
+        packed=builder.destination/'private-assets/owmc-mesh/used'
+        self.assertEqual(config.read_json(packed/'pack.json')['winstonBarrierStyle'],
+                         {'privateRoot':'local-input:winston-barrier-w5','visualMode':'mesh'})
+        proof=config.read_json(packed/'provenance.json')
+        self.assertEqual(proof['originalFileSha256'],{'pack.json':pins['pack.json']})
+        self.assertEqual(proof['files']['pack.json'],config.sha256(packed/'pack.json'))
         texture.write_bytes(b'changed')
         bundle.model('bad',self.root/'model','private-assets/owmc-mesh/bad',mesh=True)
         self.assertEqual(len(bundle.summary['missingModels']),1)
@@ -139,6 +156,7 @@ class PrivateFixtures(unittest.TestCase):
         builder=self.builder('OWMC-fixture')
         executable=self.file('offline-client/GameClientApp.patched.exe',b'inert fixture, never executable')
         self.file('offline-client/data/fixture.data',b'fixture game data')
+        self.file('offline-client/data/casc/data/shmem',b'local runtime state')
         self.file('offline-client/cache/fixture.cache')
         self.file('offline-client/credentials.json',b'fixture-do-not-copy')
         configured=config.PackPaths(self.root,configuration={'schemaVersion':1,'paths':{'owExecutable':str(executable)}})
@@ -148,7 +166,7 @@ class PrivateFixtures(unittest.TestCase):
         with patch.object(game_client,'OW_SHA256',expected),patch.object(build,'OW_SHA256',expected):
             result=game_client.stage(builder,configured)
             self.assertEqual(result['files'],2)
-            self.assertFalse(any('credentials' in p or 'cache/' in p for p in builder.rows))
+            self.assertFalse(any('credentials' in p or 'cache/' in p or p.endswith('/shmem') for p in builder.rows))
             config.write_json(builder.destination/'modpack.json',dict(includesPrivate=True,includesClient=True))
             builder.record('modpack.json','owmc')
             self.manifest(builder,includesClient=True,clientSummary=result)
@@ -173,7 +191,12 @@ class PrivateFixtures(unittest.TestCase):
         gson=list((configured.get('minecraft')/'libraries/com/google/code/gson/gson').glob('*/gson-*.jar'))
         if not javac.is_file() or not gson:self.skipTest('Java 21/Gson unavailable for standalone loader fixture')
         hero,event,identity=private_assets.voice_catalog(repository)[0]
-        data=bytearray(27);data[:4]=b'OggS';struct.pack_into('<q',data,6,2400)
+        page=bytearray(28);page[:4]=b'OggS';struct.pack_into('<q',page,6,2400)
+        page[26:28]=bytes((1,30))
+        header=bytearray(30);header[:7]=b'\x01vorbis';header[11]=1
+        struct.pack_into('<I',header,12,48000)
+        header[28:30]=bytes((0x86,1))
+        data=page+header
         source=self.file(f'voices/{hero}/{identity}.ogg',bytes(data))
         config.write_json(self.root/'voices/manifest.json',{'entries':{identity:dict(hero=hero,event=event,
             format='ogg',file=f'{hero}/{identity}.ogg',sha256=config.sha256(source),originalMp3Sha256='1'*64)}})
@@ -198,7 +221,7 @@ public class LoaderCheck {
             '-d',str(classes),str(repository/'guest/src/client/java/lab/owmcguest/HeroVoiceAssets.java'),str(stub),str(fixture)],
             capture_output=True,text=True,encoding='utf-8',timeout=30)
         self.assertEqual(compile.returncode,0,compile.stderr[-1500:])
-        run=subprocess.run([str(java),'-cp',str(classes)+';'+str(gson[-1]),'lab.owmcguest.LoaderCheck',
+        run=subprocess.run([str(java),'-Dstderr.encoding=UTF-8','-cp',str(classes)+';'+str(gson[-1]),'lab.owmcguest.LoaderCheck',
             str(self.root/'voices'),str(self.root/'profile')],capture_output=True,text=True,encoding='utf-8',timeout=20)
         self.assertEqual(run.returncode,0,run.stderr[-1500:])
         cache=self.root/'profile/resourcepacks/owmc-private-full-voice/assets/owmcguest/sounds/private/full'

@@ -26,8 +26,10 @@ public final class HeroVoiceReloadCheck {
             System.setProperty("owmc.heroVoiceDirectory",root.toString());
             String hash=HeroVoicePolicy.HANZO_ULT_HASH;
             // A structural 100 ms OGG fixture, only inspected; never decoded/played.
-            byte[] blob=new byte[27];System.arraycopy(new byte[]{'O','g','g','S'},0,blob,0,4);
-            ByteBuffer.wrap(blob).order(ByteOrder.LITTLE_ENDIAN).putLong(6,2400L);
+            byte[] blob=new byte[87];var buffer=ByteBuffer.wrap(blob).order(ByteOrder.LITTLE_ENDIAN);
+            buffer.put(new byte[]{'O','g','g','S'});buffer.put(26,(byte)1);buffer.put(27,(byte)30);
+            buffer.position(28);buffer.put((byte)1).put(new byte[]{'v','o','r','b','i','s'});buffer.put(39,(byte)1);buffer.putInt(40,24000);
+            buffer.position(58);buffer.put(new byte[]{'O','g','g','S'});buffer.putLong(64,2400L);buffer.put(84,(byte)1);buffer.put(85,(byte)1);
             String pin=HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(blob));
             Path input=root.resolve("hanzo/"+hash+".ogg");Files.createDirectories(input.getParent());Files.write(input,blob);
             var entry=new JsonObject();entry.addProperty("hero","hanzo");entry.addProperty("event","ult_cast");

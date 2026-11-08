@@ -26,7 +26,7 @@ public final class HanzoScatterContext {
         require(e.nodeTick()>0&&(e.nodeTick()&15)==0,"Scatter node/factory tick relation unavailable");
         require(n(report,"pid")==Integer.toUnsignedLong(e.pid())&&n(report,"creation")==e.creation()
             &&n(report,"hostGeneration")==e.generation()&&n(report,"modelId")==e.model()&&n(report,"hero")==HERO,"Scatter factory owner changed");
-        require(n(report,"probeVersion")==16&&n(report,"protocol")==3&&n(report,"epoch")>0
+        require((n(report,"probeVersion")==16||n(report,"probeVersion")==17)&&n(report,"protocol")==3&&n(report,"epoch")>0
             &&report.get("enabled").getAsBoolean()&&!report.get("restored").getAsBoolean()
             &&!report.get("overflow").getAsBoolean()&&n(report,"failures")==0,"Scatter factory source invalid");
         require(report.get("factoryCalibration").getAsBoolean(),"factory parameter transport disabled; unchanged MC fallback");

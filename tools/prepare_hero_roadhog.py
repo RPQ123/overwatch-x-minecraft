@@ -1,11 +1,11 @@
-"""Read-only offline24919 Roadhog bindings; never starts a game or activates skills.
+"""Read-only offline24919 Roadhog phases; no launch, native call or new owner.
 
-Evidence: docs/HERO-BRIEFS-NEW8-20261025.md section5. Q01c6:37 is a
-continuous stream B/E, not a shot per state tick. Hook19 is only target search;
-MC collision/pull supplies its target, without unobserved node21 damage.
-Factory diagnostics must be enabled separately by the existing owner controller.
-No callback owner, native-call, calibration-control or shared registration changes.
-Hook ModifyHealth21 is now collected for diagnostics; it still cannot cause damage.
+Q01c6:37 is one continuous Begin/End window. Individual weapon factories now
+use the shared acknowledged emission17 journal through native_armory_binding.
+Hook19 only authorizes the MC hook launch; actual MC collision owns target/damage
+using the audited node21 amount30, never a claim that OW hit an MC entity.
+Heal12 binds its original animation window; Heal23 binds the actual healing phase.
+No calibration toggle, callback registration or diagnostic snapshot is required.
 """
 import ctypes
 import json
@@ -20,7 +20,7 @@ GRAPHS = [
         ('primary', 30, 0x860EE5FC), ('secondary', 34, 0x860EE5FC), ('wholeHog', 37, 0x860EE5FC)]),
     ('roadhogHook', 0x05800000000001C8, 138, [
         ('cast', 11, 0x7FB4BF64), ('search', 19, 0x498B421A), ('damage', 21, 0x619D9E95)]),
-    ('roadhogHeal', 0x0580000000000240, 31, [('heal', 23, 0x619D9E95)]),
+    ('roadhogHeal', 0x0580000000000240, 31, [('heal', 23, 0x619D9E95), ('cast', 12, 0x7FB4BF64)]),
 ]
 
 

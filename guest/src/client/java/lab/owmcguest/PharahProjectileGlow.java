@@ -22,7 +22,8 @@ final class PharahProjectileGlow {
     static boolean ready;
     static String error="waiting for private Pharah glow sprites";
     private static void load(MinecraftClient client)throws Exception{
-        var root=PrivateAssetPaths.assets().resolve("owmc-pharah-projectile");
+        var local=PrivateAssetPaths.meshes().resolve("projectile-fire-fx");
+        var root=Files.isRegularFile(local.resolve("provenance.json"))?local:PrivateAssetPaths.assets().resolve("owmc-pharah-projectile");
         var files=JsonParser.parseString(Files.readString(root.resolve("provenance.json"))).getAsJsonObject().getAsJsonObject("files");
         // Validate every sprite before registering any of them.
         for(String name:TEXTURES.keySet()){
@@ -46,21 +47,24 @@ final class PharahProjectileGlow {
         vertex(v,e,radius,radius,0,1,0,r,g,b,alpha);vertex(v,e,-radius,radius,0,0,0,r,g,b,alpha);m.pop();
     }
     static boolean draw(WorldRenderContext ctx,Vec3d at,Vec3d direction,double age){
+        return draw(ctx,at,direction,age,1);
+    }
+    static boolean draw(WorldRenderContext ctx,Vec3d at,Vec3d direction,double age,float size){
         var client=MinecraftClient.getInstance();
         if(!attempted){attempted=true;try{load(client);}catch(Exception failure){error=failure.toString();}}
         if(!ready||ctx.matrixStack()==null)return false;
         var buffers=client.getBufferBuilders().getEntityVertexConsumers();
         var flare=RenderLayer.getEyes(TEXTURES.get("flare"));var glow=RenderLayer.getEyes(TEXTURES.get("glow"));var flame=RenderLayer.getEyes(TEXTURES.get("flame"));
-        var exhaust=at.subtract(direction.multiply(BastionTankPresentation.LENGTH*.42));
-        billboard(ctx,buffers.getBuffer(glow),at,.24f,255,150,32,135);
-        billboard(ctx,buffers.getBuffer(flare),exhaust,.29f,255,205,90,225);
-        billboard(ctx,buffers.getBuffer(glow),exhaust,.09f,255,248,215,245);
+        var exhaust=at.subtract(direction.multiply(BastionTankPresentation.LENGTH*.42*size));
+        billboard(ctx,buffers.getBuffer(glow),at,.24f*size,255,150,32,135);
+        billboard(ctx,buffers.getBuffer(flare),exhaust,.29f*size,255,205,90,225);
+        billboard(ctx,buffers.getBuffer(glow),exhaust,.09f*size,255,248,215,245);
         var axis=Math.abs(direction.y)<.9?new Vec3d(0,1,0):new Vec3d(1,0,0);
         var right=direction.crossProduct(axis).normalize();var up=right.crossProduct(direction).normalize();
         var camera=ctx.camera().getPos();var m=ctx.matrixStack().peek();var v=buffers.getBuffer(flame);int frame=(int)(age*36)%4;
         for(var side:List.of(right,up))for(int corner=0;corner<4;corner++){
-            boolean near=corner<2;double width=near?.12:.035,sign=corner==0||corner==3?-1:1;
-            var p=exhaust.add(side.multiply(sign*width)).subtract(direction.multiply(near?0:.65)).subtract(camera);
+            boolean near=corner<2;double width=(near?.12:.035)*size,sign=corner==0||corner==3?-1:1;
+            var p=exhaust.add(side.multiply(sign*width)).subtract(direction.multiply(near?0:.65*size)).subtract(camera);
             vertex(v,m,(float)p.x,(float)p.y,(float)p.z,(frame+(corner==0||corner==3?0:1))/4f,near?0:1,255,185,65,near?220:85);
         }
         for(var layer:List.of(flare,glow,flame))buffers.draw(layer);

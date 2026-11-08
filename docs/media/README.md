@@ -55,18 +55,18 @@
 
 ## 技能状态与图标来源
 
-状态更新于 2026-11-03，覆盖 12 位英雄的 78 项技能与机制：69 项已还原、2 项部分还原、7 项未还原。
+状态更新于 2026-11-08，覆盖 14 位英雄的 89 项技能与机制。76 项已还原、4 项已实现待实机、7 项部分、2 项未还原。
 
-状态依据为 `skill-failures.md` 的 78 项实机抽查；冰墙采用后续 `F-report.md` 的修复结果，炸弹轮胎仍未还原。两份原始记录保存在本地研究目录。麦克雷神射手与狂鼠垂死挣扎有部分效果，但画面仍待完善，列为“部分”。此表统计开发版进度，现有 1.0.0 整合包尚未加入冰墙修复。
+原有状态来自 78 项实机抽查与冰墙复测。托比昂、小美、黑百合、死神和生存机制按后续实机记录与离线修复更新。路霸有主次射击、拉取、治疗、击退等实机记录，后续视觉、拉取与音频修改仍待复测。温斯顿按当前实现和离线结果列出，原始暴怒的原生变身与 HUD 待验收。麦克雷神射手和狂鼠垂死挣扎保留部分状态，炸弹轮胎仍未还原。
 
 - 78 项抽查记录 SHA256：`daabe413a53bc476987edf6d4cef7961eb372bdaa89071e894fed020aae0bcba`。
 - 冰墙与轮胎复测记录 SHA256：`d23a87dedac1c4fe5b9a92e90bc4fdd2dccd4bc7697fbf7ec85b9d9b1662efe7`。
 
 ### 图标规格
 
-90 张 PNG（12 张头像、78 张技能图），统一 64×64，总计 341,956 字节，单张最大 9,673 字节。所有图片均本地存放，不使用外站热链。
+103 张 PNG（14 张头像、89 张技能图），统一 64×64，总计 394,193 字节，单张最大 9,673 字节。所有图片均本地存放，不使用外站热链。
 
-图像由 [Overwatch Wiki](https://overwatch.weirdgloop.org/) 提供，原作 © Blizzard Entertainment。优先选用 2017 年底以前的存档版本，共 71 个文件；其余采用站内现有图像。仅作等比缩放、方形排版与中性底色处理，没有重绘图形。
+图像由 [Overwatch Wiki](https://overwatch.weirdgloop.org/) 提供，原作 © Blizzard Entertainment。优先选用 2017 年底以前的存档版本，共 82 个文件；其余采用站内现有图像。仅作等比缩放、方形排版与中性底色处理，没有重绘图形。
 
 二段跳和爬墙共用“Cyber-Agility”图标；普通近战使用通用“Quick Melee”图标；同一武器的开火模式、地雷投放与引爆、锤击与炮台维护可共用对应技能图标。英雄与技能名称按本项目使用的旧版技能组列出，保留 McCree、Scatter Arrow、Armor Pack、Self-Repair 和 Configuration: Tank 等旧版名称。
 
@@ -164,3 +164,16 @@
 | [heroes/widowmaker/venom-mine.png](heroes/widowmaker/venom-mine.png) | [Ability Venom Mine.png](https://overwatch.weirdgloop.org/w/File:Ability_Venom_Mine.png) | [下载](https://overwatch.weirdgloop.org/images/Ability_Venom_Mine.png?4ba39) | 2014-11-12 |
 | [heroes/widowmaker/infra-sight.png](heroes/widowmaker/infra-sight.png) | [Ultimate Infra-Sight.png](https://overwatch.weirdgloop.org/w/File:Ultimate_Infra-Sight.png) | [下载](https://overwatch.weirdgloop.org/images/Ultimate_Infra-Sight.png?d7911) | 2014-11-12 |
 | [heroes/widowmaker/melee.png](heroes/widowmaker/melee.png) | [Quick melee.png](https://overwatch.weirdgloop.org/w/File:Quick_melee.png) | [下载](https://overwatch.weirdgloop.org/images/Quick_melee.png?4277c) | 2019-04-10 |
+| [heroes/roadhog/portrait.png](heroes/roadhog/portrait.png) | [Icon-Roadhog.png](https://overwatch.weirdgloop.org/w/File:Icon-Roadhog.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181019024332%21Icon-Roadhog.png?6e6cc) | 2015-10-21 |
+| [heroes/roadhog/scrap-gun.png](heroes/roadhog/scrap-gun.png) | [Ability_Scrap_Gun.png](https://overwatch.weirdgloop.org/w/File:Ability_Scrap_Gun.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181119025357%21Ability_Scrap_Gun.png?88e05) | 2015-09-24 |
+| [heroes/roadhog/scrap-gun-secondary.png](heroes/roadhog/scrap-gun-secondary.png) | [Ability_Scrap_Gun.png](https://overwatch.weirdgloop.org/w/File:Ability_Scrap_Gun.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181119025357%21Ability_Scrap_Gun.png?88e05) | 2015-09-24 |
+| [heroes/roadhog/chain-hook.png](heroes/roadhog/chain-hook.png) | [Ability_Chain_Hook.png](https://overwatch.weirdgloop.org/w/File:Ability_Chain_Hook.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20260810145623%21Ability_Chain_Hook.png?e9105) | 2015-09-24 |
+| [heroes/roadhog/take-a-breather.png](heroes/roadhog/take-a-breather.png) | [Ability_Take_a_Breather.png](https://overwatch.weirdgloop.org/w/File:Ability_Take_a_Breather.png) | [下载](https://overwatch.weirdgloop.org/images/Ability_Take_a_Breather.png?58040) | 2015-09-24 |
+| [heroes/roadhog/whole-hog.png](heroes/roadhog/whole-hog.png) | [Ultimate_Whole_Hog.png](https://overwatch.weirdgloop.org/w/File:Ultimate_Whole_Hog.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20221128013700%21Ultimate_Whole_Hog.png?f998f) | 2015-09-24 |
+| [heroes/roadhog/melee.png](heroes/roadhog/melee.png) | [Quick_melee.png](https://overwatch.weirdgloop.org/w/File:Quick_melee.png) | [下载](https://overwatch.weirdgloop.org/images/Quick_melee.png?4277c) | 2019-04-10 |
+| [heroes/winston/portrait.png](heroes/winston/portrait.png) | [Icon-Winston.png](https://overwatch.weirdgloop.org/w/File:Icon-Winston.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181019025022%21Icon-Winston.png?e212f) | 2014-11-07 |
+| [heroes/winston/tesla-cannon.png](heroes/winston/tesla-cannon.png) | [Ability_Tesla_Cannon.png](https://overwatch.weirdgloop.org/w/File:Ability_Tesla_Cannon.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181119054432%21Ability_Tesla_Cannon.png?9d777) | 2016-07-03 |
+| [heroes/winston/jump-pack.png](heroes/winston/jump-pack.png) | [Ability_Jump_Pack.png](https://overwatch.weirdgloop.org/w/File:Ability_Jump_Pack.png) | [下载](https://overwatch.weirdgloop.org/images/archive/20181119054304%21Ability_Jump_Pack.png?65a70) | 2014-11-12 |
+| [heroes/winston/barrier-projector.png](heroes/winston/barrier-projector.png) | [Ability_Barrier_Projector.png](https://overwatch.weirdgloop.org/w/File:Ability_Barrier_Projector.png) | [下载](https://overwatch.weirdgloop.org/images/Ability_Barrier_Projector.png?f022a) | 2014-11-12 |
+| [heroes/winston/primal-rage.png](heroes/winston/primal-rage.png) | [Ultimate_Primal_Rage.png](https://overwatch.weirdgloop.org/w/File:Ultimate_Primal_Rage.png) | [下载](https://overwatch.weirdgloop.org/images/Ultimate_Primal_Rage.png?fa61e) | 2014-11-12 |
+| [heroes/winston/melee.png](heroes/winston/melee.png) | [Quick_melee.png](https://overwatch.weirdgloop.org/w/File:Quick_melee.png) | [下载](https://overwatch.weirdgloop.org/images/Quick_melee.png?4277c) | 2019-04-10 |

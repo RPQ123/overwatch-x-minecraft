@@ -11,7 +11,7 @@ import net.minecraft.util.math.RotationAxis;
 
 /** Original private 24919 hero body meshes; MC owns the training NPC simulation. */
 public final class HeroNpcRenderer extends EntityRenderer<HeroNpcEntity> {
-    private static final float[][] bounds=new float[12][];
+    private static final float[][] bounds=new float[HeroNpcCatalog.ENTRIES.size()][];
     public static volatile String error="";public static long draws;
     public HeroNpcRenderer(EntityRendererFactory.Context context){super(context);shadowRadius=.35f;}
     static void register(){EntityRendererRegistry.register(HeroNpcEntity.TYPE,HeroNpcRenderer::new);}
@@ -27,6 +27,10 @@ public final class HeroNpcRenderer extends EntityRenderer<HeroNpcEntity> {
                 if(!Float.isFinite(min)||max-min<.5||max-min>5)throw new IllegalArgumentException("hero body bounds");bounds[index]=new float[]{min,max};
             }
             matrices.push();try{
+                // This renderer derives directly from EntityRenderer, so it
+                // must apply LivingEntity's synced scale itself (vanilla mob
+                // renderers already do so). Collision uses the same attribute.
+                float size=e.getScale();matrices.scale(size,size,size);shadowRadius=.35f*size;
                 matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-yaw));matrices.translate(0,-bounds[index][0],0);
                 var immediate=buffers instanceof VertexConsumerProvider.Immediate i?i:net.minecraft.client.MinecraftClient.getInstance().getBufferBuilders().getEntityVertexConsumers();
                 pack.draw(immediate,matrices.peek(),light,1,e.hurtTime>0?.45f:1,e.hurtTime>0?.45f:1,1);draws++;error="";

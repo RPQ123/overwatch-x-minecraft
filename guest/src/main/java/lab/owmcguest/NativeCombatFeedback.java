@@ -32,7 +32,7 @@ public final class NativeCombatFeedback {
         if(!pending.offer(new Cue(owner,world,hero,model,generation,++sequence,now,kill)))dropped++;
     }
     private static void death(LivingEntity victim,long now){
-        tracked.remove(victim.getUuid());if(ledger.death(victim.getUuid(),victim.getHealth(),now)){if(hero==NativeReaperRuntime.HERO)NativeSoulRuntime.killed(victim);emit(now,true);}
+        tracked.remove(victim.getUuid());if(ledger.death(victim.getUuid(),victim.getHealth(),now))emit(now,true);
     }
     public static void tick(MinecraftServer server){
         var player=owner==null?null:server.getPlayerManager().getPlayer(owner);long now=System.currentTimeMillis();

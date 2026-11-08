@@ -27,7 +27,7 @@ final class NativeCombatFeed {
             if(!Files.isRegularFile(path)||Files.size(path)>524288){error="native journal missing/oversized";return;}
             var expected=new NativeShotProtocol.Expected(host.pid(),(int)ProcessHandle.current().pid(),host.generation(),generation,world,client.player.getEyeHeight(client.player.getPose()),nativeModel,nativeHero);
             var batch=NativeShotProtocol.decode(Files.readString(path),expected,now);var player=client.player.getUuid();
-            for(var entry:batch.entries())if(entry.shot()!=null){var forward=new org.joml.Vector3f(0,0,-1).rotate(host.rotation());var v=entry.shot().velocity();aimDot=(forward.x*v.x()+forward.y*v.y()+forward.z*v.z())/Math.sqrt(v.lengthSquared());}
+            for(var entry:batch.entries())if(entry.shot()!=null){NativeMuzzleOrigins.shot(client,host,nativeHero,entry.shot());var forward=new org.joml.Vector3f(0,0,-1).rotate(host.rotation());var v=entry.shot().velocity();aimDot=(forward.x*v.x()+forward.y*v.y()+forward.z*v.z())/Math.sqrt(v.lengthSquared());}
             pending.set(true);server.execute(()->{
                 try{
                     long cursor=NativeCombatRuntime.accept(server,player,world,nativeModel,batch);

@@ -77,7 +77,9 @@ public final class NativeJunkratController implements AutoCloseable {
         if(s==null){error=r.error;last[i]=-1;diagnostic.addProperty("error",r.error);return diagnostic;}
         var e=s.entries().get(node);diagnostic.addProperty("tick",e.tick());diagnostic.addProperty("active",e.active());
         if(last[i]<0){last[i]=e.tick();return diagnostic;}
-        if(e.tick()>last[i]){last[i]=e.tick();long nativeTick=e.tick();int nativePid=h.pid();server.execute(()->NativeJunkratRuntime.cast(server,scope,kind,nativePid,nativeTick));}
+        if(e.tick()>last[i]){last[i]=e.tick();long nativeTick=e.tick();int nativePid=h.pid();
+            var c=MinecraftClient.getInstance();NativeMuzzleOrigins.thrown(c,h,NativeJunkratRuntime.visualId(nativePid,nativeTick,kind),hero,c.player.getEyePos().add(c.player.getRotationVec(1).multiply(.5)),kind!=NativeJunkratRuntime.Kind.GRENADE);
+            server.execute(()->NativeJunkratRuntime.cast(server,scope,kind,nativePid,nativeTick));}
         return diagnostic;
     }
     void resetSession(){

@@ -4,6 +4,6 @@
   "compatibilityLevel": "JAVA_21",
   "refmap": "client-owmc-guest-refmap.json",
   "client": ["BackgroundWindowMixin", "HostCameraMixin", "HostLensMixin", "HostMovementMixin",
-    "HanzoQTravelMixin", "HostFlightMixin", "HostMouseCaptureMixin", "FullBrightMixin", "NativeDashTravelMixin", "FinalWorldCaptureMixin", "BossBarHudAccessor", "BossBarTravelMixin", "HanzoSonicGlowMixin", "MeiFrozenMobMixin", "MeiFrozenTravelMixin", "NativeJunkratCameraMixin", "NativeJunkratControlMixin", "HeroVoiceMovementSoundMixin", "HeroVoicePlayerFallSoundMixin"],
+    "HanzoQTravelMixin", "HostFlightMixin", "HostMouseCaptureMixin", "FullBrightMixin", "NativeDashTravelMixin", "FinalWorldCaptureMixin", "BossBarHudAccessor", "BossBarTravelMixin", "HanzoSonicGlowMixin", "MeiFrozenMobMixin", "MeiFrozenTravelMixin", "NativeJunkratCameraMixin", "NativeJunkratControlMixin", "HeroVoiceMovementSoundMixin", "HeroVoicePlayerFallSoundMixin", "SoulAnimalHeadPartsMixin"],
   "injectors": {"defaultRequire": 1}
 }

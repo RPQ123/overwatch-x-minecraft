@@ -30,7 +30,7 @@ final class SurvivalMenu {
         boolean casting=NativeUltimateController.active||NativeDeadeyeController.active||NativeRecallController.rewinding()||NativeWraithController.active()||NativeShadowController.casting()||NativeReaperController.active();
         if(!valid||action||casting){token++;if(pending){pending=false;epoch++;}}
         eligible=valid&&!action&&!casting;wall=System.currentTimeMillis();
-        boolean was=keys.open();int page=keys.page();int choice=keys.poll(valid,down,pending,singles?12:4);
+        boolean was=keys.open();int page=keys.page();int choice=keys.poll(valid,down,pending,singles?HeroNpcCatalog.ENTRIES.size():4);
         if(was!=keys.open()){
             epoch++;if(keys.open()){PortalMenu.closePortal();SummonMenu.closeMenu();WorldSettingsMenu.closeMenu();TwilightBossMenu.closeMenu();singles=false;keys.firstPage();message="";}
             else{token++;pending=false;}
@@ -57,8 +57,8 @@ final class SurvivalMenu {
         int half=(int)(Math.min(1024,c.getWindow().getFramebufferWidth())/scale/2),available=(int)(Math.min(192,c.getWindow().getFramebufferHeight())/scale);float fit=Math.min(1f,available/73f);
         context.getMatrices().push();context.getMatrices().translate(center,0,0);context.getMatrices().scale(fit,fit,1);int hw=(int)(half/fit);context.fill(-hw,0,hw,73,0xee111827);
         context.drawCenteredTextWithShadow(c.textRenderer,singles?"F5 召唤英雄  "+(keys.page()+1)+" / 2":"F5 英雄召唤 / 生存模式",0,6,0xff7ce7ff);
-        var root=List.of("选择一位英雄（共 12 位）","召唤全部英雄","清除我的英雄召唤","生存模式："+(SurvivalRuntime.enabled()?"开（会受伤）":"关（无敌）"));
-        for(int i=0;i<8;i++){int index=keys.page()*8+i;if(index>=(singles?12:4))break;String name=singles?HeroNpcCatalog.entry(index).name():root.get(index);
+        var root=List.of("选择一位英雄（共 "+HeroNpcCatalog.ENTRIES.size()+" 位）","召唤全部英雄","清除我的英雄召唤","生存模式："+(SurvivalRuntime.enabled()?"开（会受伤）":"关（无敌）"));
+        for(int i=0;i<8;i++){int index=keys.page()*8+i;if(index>=(singles?HeroNpcCatalog.ENTRIES.size():4))break;String name=singles?HeroNpcCatalog.entry(index).name():root.get(index);
             context.drawTextWithShadow(c.textRenderer,c.textRenderer.trimToWidth((i+1)+"  "+name,hw-14),i%2==0?-hw+8:6,16+i/2*11,pending?0xff8b95a6:0xfff3f4f6);}
         String footer=message.isEmpty()?(pending?"正在处理…":singles?"1–8 / 小键盘选择   9 下一页   0 上一页   F5 关闭":"数字键 / 小键盘选择   F5 关闭（设置自动保存）"):message;
         context.drawCenteredTextWithShadow(c.textRenderer,c.textRenderer.trimToWidth(footer,hw*2-12),0,64,0xffffd479);context.getMatrices().pop();

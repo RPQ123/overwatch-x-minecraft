@@ -38,7 +38,7 @@ final class PharahConcussiveRenderer {
         var buffers=c.getBufferBuilders().getEntityVertexConsumers();var layer=RenderLayer.getDebugQuads();boolean drew=false;long now=System.currentTimeMillis();
         for(var shot:view.shots()){
             double age=(now-shot.wallMs())/1000.;if(age<0||age>shot.lifetime())continue;
-            var at=new Vec3d(shot.start().x()+shot.velocity().x()*age,shot.start().y()+shot.velocity().y()*age,shot.start().z()+shot.velocity().z()*age);
+            var at=NativeMuzzleOrigins.at(shot.identity(),new Vec3d(shot.start().x()+shot.velocity().x()*age,shot.start().y()+shot.velocity().y()*age,shot.start().z()+shot.velocity().z()*age));
             if(!c.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
             // Exact admitted trajectory; drawing cannot manufacture a shot.
             shell(ctx,buffers.getBuffer(layer),matrices,at,.14375f,90,205,255,180);

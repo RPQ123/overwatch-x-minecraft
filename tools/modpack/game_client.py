@@ -20,7 +20,9 @@ def stage(builder, configured) -> dict:
     copied=0;size=0;omitted=0
     for path in sorted(source.rglob('*')):
         relative=path.relative_to(source)
-        if any(part.casefold() in OMIT_DIRS for part in relative.parts) or path.name.casefold() in OMIT_FILES or path.suffix.lower() in ('.log','.tmp','.dmp','.lnk'):
+        if (any(part.casefold() in OMIT_DIRS for part in relative.parts) or path.name.casefold() in OMIT_FILES
+                or path.suffix.lower() in ('.log','.tmp','.dmp','.lnk')
+                or relative.as_posix().casefold() == 'data/casc/data/shmem'):
             omitted+=int(path.is_file());continue
         if path.is_symlink() or path.is_junction():
             raise ValueError('客户端含链接，未跟随复制：'+str(relative))

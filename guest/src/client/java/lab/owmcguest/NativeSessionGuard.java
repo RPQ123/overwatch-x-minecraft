@@ -59,12 +59,12 @@ final class NativeSessionGuard {
         NativeReaperController.INSTANCE.resetSession();
         NativeWraithController.INSTANCE.resetSession();
         NativeShadowController.INSTANCE.resetSession();
-        NativeGrappleController.INSTANCE.resetSession();
+        NativeGrappleController.INSTANCE.revalidateSession(player,world,hero,model,hostGeneration);
         NativeMeiSkillController.INSTANCE.resetSession();
         NativeJunkratController.INSTANCE.resetSession();
         NativeHanzoSkillController.INSTANCE.resetSession();
         NativeTorbjornController.INSTANCE.resetSession();
-        HeroClientModules.resetSession();
+        HeroClientModules.revalidateSession(player,world,hero,model,hostGeneration);
         NativePortalController.INSTANCE.resetSession();
         NativeUtilityController.INSTANCE.resetSession();
         TwilightBossMenu.reset();
@@ -106,8 +106,8 @@ final class NativeSessionGuard {
         NativeIceWallRuntime.resetSession();
         NativeJunkratRuntime.resetSession();
         NativeHanzoSkillRuntime.resetSession();
-        NativeTorbjornRuntime.resetSession();
-        HeroServerModules.resetSession();
+        NativeTorbjornRuntime.revalidateSession(player,world,hero,model,hostGeneration);
+        HeroServerModules.revalidateSession(player,world,hero,model,hostGeneration);
         NativePortalRuntime.resetSession();
         NativeEliminationRuntime.configure(player,world,hero,model,hostGeneration);
         NativePulseRuntime.revalidateSession(player,world,hero,model,hostGeneration);

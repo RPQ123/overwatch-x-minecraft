@@ -9,7 +9,7 @@ public final class NativeMotorController implements AutoCloseable {
     public static volatile String status="{\"ready\":false}";
     /** Actual Sentry/transform state, never the Shift key or a guessed timer. */
     public boolean jumpLocked(){
-        if(NativeRecallController.rewinding()||NativeShadowController.casting())return true;
+        if(NativeRecallController.rewinding()||NativeShadowController.casting()||RoadhogClient.breatherLocked())return true;
         var loc=NativeLocomotionController.INSTANCE;var host=HostPoseReader.INSTANCE.latest();
         if(loc.hero()!=0x02e0000000000015L||loc.modelId()==0||host==null||!host.inputActive())return false;
         var state=skills.poll(host,loc.modelId(),loc.hero());

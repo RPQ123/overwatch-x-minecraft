@@ -7,6 +7,8 @@ import net.minecraft.client.MinecraftClient;
 public interface HeroClientModule {
     void tick(MinecraftClient client);
     void resetSession();
+    /** Same pawn camera/focus transitions may retain an authenticated ability. */
+    default void revalidateSession(java.util.UUID player,long world,long hero,long model,long source){resetSession();}
     default void registerRender(){}
     String errorKey();
     String error();

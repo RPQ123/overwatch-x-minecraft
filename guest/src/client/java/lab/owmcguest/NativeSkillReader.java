@@ -38,6 +38,37 @@ final class NativeSkillReader implements AutoCloseable {
     private Pointer handle;private JsonObject binding;private int pid;private long generation;
     String error="waiting for native skill binding";
     private long n(String key){return binding.get(key).getAsLong();}
+    double placementRemaining(int kind){
+        verify();long wanted=kind==1?0x0580000000000622L:kind==2?0x05800000000000f4L:kind==5?0x058000000000010aL:kind==6?0x05800000000000faL:0x058000000000005aL;
+        if(n("resource")!=wanted)throw new IllegalArgumentException("placement resource");
+        int node=kind==1?28:kind==2?55:kind==5?58:kind==6?26:83;long all=array(n("graph")+0x50,kind==1?104:kind==2?60:kind==5?65:kind==6?33:91),definition=q(all+node*8L);
+        var header=bytes(read(n("script")+0xa0,16));long states=header.getLong();int count=header.getInt(),capacity=header.getInt();
+        if(count<0||count>capacity||capacity>4096)throw new IllegalArgumentException("cooldown runtime vector");
+        long storage=q(n("graph")+0x60),flag=q(n("graph")+0x68);if(flag!=1&&flag!=2)throw new IllegalArgumentException("cooldown definitions");
+        long definitions=q(storage+(flag==1?0:8)),defined=q(storage+(flag==1?8:0));if(defined<1||defined>4096)throw new IllegalArgumentException("cooldown definition count");
+        long value=0,vtable=n("adminAddress")-0x17b7f90+0x15d7c98;
+        for(int i=0;i<count;i++){long state=q(states+i*8L);if(state==0||q(state)!=vtable)continue;int index=i(state+0x70);
+            if(index<0||index>=defined||q(state+0x78)!=n("script"))throw new IllegalArgumentException("cooldown runtime owner");
+            if(q(definitions+index*8L)==definition){if(value!=0)throw new IllegalArgumentException("duplicate cooldown runtime");value=state;}}
+        if(value==0)throw new IllegalArgumentException("cooldown ability runtime missing");
+        float remaining=bytes(read(value+0x150,4)).getFloat();
+        if(!Float.isFinite(remaining)||remaining<0||remaining>120||(read(value+0x144,1)[0]&255)>1||(read(value+0x146,1)[0]&255)>1)throw new IllegalArgumentException("cooldown seconds/flags");verify();return remaining;
+    }
+    PlacementActionProtocol.Request placementRequest(int kind,long sequence,long world,long token){
+        verify();placementRemaining(kind);return new PlacementActionProtocol.Request(pid,n("creation"),sequence,System.currentTimeMillis(),generation,world,n("model"),n("modelId"),n("script"),n("graph"),n("logger"),token,kind);
+    }
+    /** Optional audio ownership observation. Failure never closes a cast reader. */
+    long winstonEffectTick(int index){
+        try{
+            boolean jump=purposeName.equals("winstonJump"),barrier=purposeName.equals("winstonBarrier");
+            if(binding==null||n("hero")!=WinstonRules.HERO||(!jump&&!barrier)||(jump?index!=17&&index!=37:index!=7))throw new IllegalArgumentException("Winston audio role");
+            verify();long definition=q(array(n("graph")+0x50,jump?65:33)+index*8L),fn=q(q(definition)+0x28);
+            byte[] code=read(fn,8);
+            if(code[0]!=0x48||code[1]!=(byte)0x8d||code[2]!=5||code[7]!=(byte)0xc3||i(fn+7+bytes(code).getInt(3)+0x50)!=0xeb923a6a)throw new IllegalArgumentException("Winston original Effect type");
+            long inner=find(n("logger"),n("script"),true);var a=state(inner,index);var b=state(inner,index);verify();
+            if(!a.equals(b))throw new IllegalArgumentException("Winston audio snapshot changed");return a.tick();
+        }catch(Exception failure){WinstonDiagnostics.value("nativeAudioReadError",failure.toString());return -1;}
+    }
     /** Addresses from the same binding just verified by poll/deadeyeGeometry. */
     long[] deadeyeInputBinding(){
         if(binding==null||n("hero")!=NativeDeadeyeRuntime.HERO)throw new IllegalStateException("Deadeye input binding absent");

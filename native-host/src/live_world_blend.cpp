@@ -7,13 +7,17 @@ Texture2D<float4> nativeColor:register(t0);
 Texture2D<float4> worldColor:register(t1);
 Texture2D<float> beforeDepth:register(t2);
 Texture2D<float> afterDepth:register(t3);
+Texture2D<float> handMask:register(t4);
 cbuffer Transform:register(b0) {row_major float4x4 targetToSource;uint preserveHand;float handExposure;float selectionDepthCutoff;uint neutralMetal;};
 struct V {float4 pos:SV_Position;float2 uv:TEXCOORD;};
 V VS(uint id:SV_VertexID) {V o;o.uv=float2((id<<1)&2,id&2);o.pos=float4(o.uv.x*2-1,1-o.uv.y*2,0,1);return o;}
+float4 MaskPS(V i):SV_Target {
+    int2 xy=int2(i.pos.xy);return beforeDepth.Load(int3(xy,0))!=afterDepth.Load(int3(xy,0))?1:0;
+}
 float4 PS(V i):SV_Target {
     int2 xy=int2(i.pos.xy);float4 native=nativeColor.Load(int3(xy,0));
     // R24 SRVs exclude stencil. Compare this frame's exact depth pair on GPU.
-    bool foreground=selectionDepthCutoff>0 ? afterDepth.Load(int3(xy,0))<selectionDepthCutoff : beforeDepth.Load(int3(xy,0))!=afterDepth.Load(int3(xy,0));
+    bool foreground=selectionDepthCutoff>0 ? afterDepth.Load(int3(xy,0))<selectionDepthCutoff : handMask.Load(int3(xy,0))>.5;
     if(preserveHand&&foreground) {
         // A unit setting must be a true RGB pass-through, including deep
         // metallic shadows. Avoid even a redundant pow/log round trip there.
@@ -49,28 +53,44 @@ LiveWorldBlend::LiveWorldBlend(ID3D11Device* input):device(input) {
         if(FAILED(hr)&&error) throw std::runtime_error(std::string(static_cast<char*>(error->GetBufferPointer()),error->GetBufferSize()));
         gpuCheck(hr,"live shader");return code;};
     auto v=compile("VS","vs_5_0"),p=compile("PS","ps_5_0");gpuCheck(device->CreateVertexShader(v->GetBufferPointer(),v->GetBufferSize(),nullptr,vs.GetAddressOf()),"live VS");gpuCheck(device->CreatePixelShader(p->GetBufferPointer(),p->GetBufferSize(),nullptr,ps.GetAddressOf()),"live PS");
+    auto mask=compile("MaskPS","ps_5_0");gpuCheck(device->CreatePixelShader(mask->GetBufferPointer(),mask->GetBufferSize(),nullptr,maskPs.GetAddressOf()),"live group mask PS");
+    D3D11_BLEND_DESC blend{};auto& rt=blend.RenderTarget[0];rt.BlendEnable=TRUE;rt.SrcBlend=rt.DestBlend=rt.SrcBlendAlpha=rt.DestBlendAlpha=D3D11_BLEND_ONE;
+    rt.BlendOp=rt.BlendOpAlpha=D3D11_BLEND_OP_MAX;rt.RenderTargetWriteMask=D3D11_COLOR_WRITE_ENABLE_RED;gpuCheck(device->CreateBlendState(&blend,maskMax.GetAddressOf()),"live group union blend");
     D3D11_RASTERIZER_DESC rd{};rd.FillMode=D3D11_FILL_SOLID;rd.CullMode=D3D11_CULL_NONE;rd.DepthClipEnable=TRUE;gpuCheck(device->CreateRasterizerState(&rd,raster.GetAddressOf()),"live raster");
     D3D11_BUFFER_DESC bd{};bd.ByteWidth=80;bd.Usage=D3D11_USAGE_DEFAULT;bd.BindFlags=D3D11_BIND_CONSTANT_BUFFER;gpuCheck(device->CreateBuffer(&bd,nullptr,constants.GetAddressOf()),"live warp constants");
 }
-void LiveWorldBlend::beginFrame() {assertOwner();before=false;after=false;}
+void LiveWorldBlend::beginFrame() {assertOwner();before=false;after=false;maskReady=false;if(maskTarget){FLOAT zero[4]{};context->ClearRenderTargetView(maskTarget.Get(),zero);}}
 void LiveWorldBlend::depthSize(ID3D11Texture2D* source) {
     assertOwner();D3D11_TEXTURE2D_DESC d{};source->GetDesc(&d);
     if(!d.Width||!d.Height||d.Width>4096||d.Height>2160||d.MipLevels!=1||d.ArraySize!=1||d.SampleDesc.Count!=1||d.Format!=DXGI_FORMAT_R24G8_TYPELESS) throw std::runtime_error("Uncalibrated live depth");
     if(width==d.Width&&height==d.Height&&beforeDepth&&afterDepth) return;
-    beforeView.Reset();afterView.Reset();beforeDepth.Reset();afterDepth.Reset();nativeColor.Reset();nativeView.Reset();colorFormat=DXGI_FORMAT_UNKNOWN;
+    beforeView.Reset();afterView.Reset();beforeDepth.Reset();afterDepth.Reset();nativeColor.Reset();nativeView.Reset();maskView.Reset();maskTarget.Reset();handMask.Reset();maskReady=false;colorFormat=DXGI_FORMAT_UNKNOWN;
     width=d.Width;height=d.Height;d.Usage=D3D11_USAGE_DEFAULT;d.CPUAccessFlags=0;d.MiscFlags=0;d.BindFlags=D3D11_BIND_SHADER_RESOURCE;
     gpuCheck(device->CreateTexture2D(&d,nullptr,beforeDepth.GetAddressOf()),"live before depth");gpuCheck(device->CreateTexture2D(&d,nullptr,afterDepth.GetAddressOf()),"live after depth");allocations+=2;
     D3D11_SHADER_RESOURCE_VIEW_DESC srv{};srv.Format=DXGI_FORMAT_R24_UNORM_X8_TYPELESS;srv.ViewDimension=D3D11_SRV_DIMENSION_TEXTURE2D;srv.Texture2D.MipLevels=1;
     gpuCheck(device->CreateShaderResourceView(beforeDepth.Get(),&srv,beforeView.GetAddressOf()),"live before depth view");gpuCheck(device->CreateShaderResourceView(afterDepth.Get(),&srv,afterView.GetAddressOf()),"live after depth view");
+    auto md=d;md.Format=DXGI_FORMAT_R8_UNORM;md.BindFlags=D3D11_BIND_SHADER_RESOURCE|D3D11_BIND_RENDER_TARGET;
+    gpuCheck(device->CreateTexture2D(&md,nullptr,handMask.GetAddressOf()),"live group mask texture");gpuCheck(device->CreateShaderResourceView(handMask.Get(),nullptr,maskView.GetAddressOf()),"live group mask view");
+    gpuCheck(device->CreateRenderTargetView(handMask.Get(),nullptr,maskTarget.GetAddressOf()),"live group mask RTV");FLOAT zero[4]{};context->ClearRenderTargetView(maskTarget.Get(),zero);allocations++;
 }
 void LiveWorldBlend::captureBefore(ID3D11Texture2D* depth) {
-    if(before) throw std::runtime_error("Duplicate live before-depth");
-    depthSize(depth);context->CopyResource(beforeDepth.Get(),depth);before=true;
+    if(before&&!after) throw std::runtime_error("Unfinished live hand group");
+    depthSize(depth);context->CopyResource(beforeDepth.Get(),depth);before=true;after=false;
 }
 void LiveWorldBlend::captureAfter(ID3D11Texture2D* depth) {
     assertOwner();D3D11_TEXTURE2D_DESC d{};depth->GetDesc(&d);
     if(!before||after||d.Width!=width||d.Height!=height||d.Format!=DXGI_FORMAT_R24G8_TYPELESS||d.SampleDesc.Count!=1) throw std::runtime_error("Unpaired live after-depth");
-    context->CopyResource(afterDepth.Get(),depth);after=true;
+    context->CopyResource(afterDepth.Get(),depth);after=true;accumulateMask();
+}
+void LiveWorldBlend::accumulateMask(){
+    // MAX unions the exact depth delta of each independently verified group;
+    // intervening world draws never enter either group's capture pair.
+    commands->ClearState();auto* out=maskTarget.Get();commands->OMSetRenderTargets(1,&out,nullptr);
+    D3D11_VIEWPORT vp{0,0,float(width),float(height),0,1};commands->RSSetViewports(1,&vp);commands->RSSetState(raster.Get());
+    commands->OMSetBlendState(maskMax.Get(),nullptr,~0u);commands->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commands->VSSetShader(vs.Get(),nullptr,0);commands->PSSetShader(maskPs.Get(),nullptr,0);
+    ID3D11ShaderResourceView* views[]={beforeView.Get(),afterView.Get()};commands->PSSetShaderResources(2,2,views);commands->Draw(3,0);
+    ComPtr<ID3D11CommandList> list;gpuCheck(commands->FinishCommandList(FALSE,list.GetAddressOf()),"live group mask list");context->ExecuteCommandList(list.Get(),TRUE);maskReady=true;
 }
 void LiveWorldBlend::captureSelection(ID3D11Texture2D* depth) {
     depthSize(depth);context->CopyResource(afterDepth.Get(),depth);before=true;after=true;
@@ -78,8 +98,8 @@ void LiveWorldBlend::captureSelection(ID3D11Texture2D* depth) {
 void LiveWorldBlend::draw(ID3D11Texture2D* target,const WorldFrame& f,const Matrix& warp,bool preserveHand,float handExposure,float selectionDepthCutoff,bool neutralMetal) {
     assertOwner();D3D11_TEXTURE2D_DESC td{};target->GetDesc(&td);
     if(!preserveHand&&(width!=td.Width||height!=td.Height)) {
-        beforeView.Reset();afterView.Reset();beforeDepth.Reset();afterDepth.Reset();nativeColor.Reset();nativeView.Reset();colorFormat=DXGI_FORMAT_UNKNOWN;
-        width=td.Width;height=td.Height;before=false;after=false;
+        beforeView.Reset();afterView.Reset();beforeDepth.Reset();afterDepth.Reset();nativeColor.Reset();nativeView.Reset();maskView.Reset();maskTarget.Reset();handMask.Reset();colorFormat=DXGI_FORMAT_UNKNOWN;
+        width=td.Width;height=td.Height;before=false;after=false;maskReady=false;
     }
     if((preserveHand&&!ready())||!td.Width||!td.Height||td.Width>4096||td.Height>2160||td.Width!=width||td.Height!=height||td.MipLevels!=1||td.ArraySize!=1||td.SampleDesc.Count!=1||
        (td.Format!=DXGI_FORMAT_R8G8B8A8_UNORM&&td.Format!=DXGI_FORMAT_B8G8R8A8_UNORM)||!f.width||!f.height||f.width>2560||f.height>1440||f.rgba.size()!=size_t(f.width)*f.height*4) throw std::runtime_error("Live blend bounds/pair");
@@ -101,7 +121,7 @@ void LiveWorldBlend::draw(ID3D11Texture2D* target,const WorldFrame& f,const Matr
     ComPtr<ID3D11RenderTargetView> output;gpuCheck(device->CreateRenderTargetView(target,nullptr,output.GetAddressOf()),"live output view");
     commands->ClearState();auto* rtv=output.Get();commands->OMSetRenderTargets(1,&rtv,nullptr);D3D11_VIEWPORT vp{0,0,float(width),float(height),0,1};commands->RSSetViewports(1,&vp);commands->RSSetState(raster.Get());
     commands->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);commands->VSSetShader(vs.Get(),nullptr,0);commands->PSSetShader(ps.Get(),nullptr,0);
-    ID3D11ShaderResourceView* views[]={nativeView.Get(),guestView.Get(),beforeView.Get(),afterView.Get()};commands->PSSetShaderResources(0,4,views);auto* cb=constants.Get();commands->PSSetConstantBuffers(0,1,&cb);commands->Draw(3,0);
+    ID3D11ShaderResourceView* views[]={nativeView.Get(),guestView.Get(),beforeView.Get(),afterView.Get(),maskReady?maskView.Get():nullptr};commands->PSSetShaderResources(0,5,views);auto* cb=constants.Get();commands->PSSetConstantBuffers(0,1,&cb);commands->Draw(3,0);
     ComPtr<ID3D11CommandList> list;gpuCheck(commands->FinishCommandList(FALSE,list.GetAddressOf()),"live command list");context->ExecuteCommandList(list.Get(),TRUE);gpuCheck(device->GetDeviceRemovedReason(),"live device health");
     // FALSE resets the deferred state; list/output die here, retaining no target.
 }

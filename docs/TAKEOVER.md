@@ -1,5 +1,80 @@
 # Replacement PC takeover — 2026-10-16
 
+## 2026-11-04 — T5代码构建交付，用户手测待进行
+
+仅代码/构建，未启动OW/MC、改分辨率、录制或操作键鼠；不提交、不重建dist。开发候选48/29/11/16/10/1，JAR SHA256 `de0662031b984ff39b7f9e7586188149b1b28260c3ff330078498ebf89e8f32a`，body29 `19bb2d7dd1c2bdd80845a5ad8652cd83bcbbfb3e8e8ee7aa472ff75aff297f00`。现有00:57 JAR与00:58 DLL已核对晚于最终源码，交付日志成功；完整71任务、最后源码刷新8任务、原生17夹具通过。HTTP首轮2秒响应超时，未改bridge，收尾限时独立复跑通过1测试。
+
+实现：MC原版小白头+蓝紫特效灵魂球；Mei E预览/LMB边沿确认/E或RMB取消；真实原生10秒冰墙与8秒炮台冷却及回执；9列共享几何、五原版柱+连续冰芯和1/16地形碰撞；黑百合Shift/跳跃中途取消动量超级跳，MC重力/碰撞及原生12秒冷却保留。均待用户实际画面、HUD和手感验收，不能据夹具声称实机通过。
+
+7506个人档案SHA零差异，原配置及无关源码保持；T5中文已用UTF-8重写并确认无连续三个问号。报告、手测清单、29项改动及SHA见 `research/fix/T-report.md` 的T5节；证据 `research/fix/T5-lab/evidence/closeout.json`，完成标记 `research/fix/T5-DONE.txt`。T3枪口精确像素等旧的未验收项继续保留。
+
+
+## 2026-11-03 — T4 掉落物/吸附代码与构建交付，待用户手测
+
+本轮继续遵守用户的**只改代码、只构建，不启动 OW/MC、不改分辨率、不录视频、不操作键鼠**。没有实机验收、提交或 dist 重建；最终只读游戏与监督器为 0，配置/设置按原字节保持。
+
+开发候选为 **48/28/11/16/10/1**；新 JAR SHA256 `72353555dc5b26d3f04028f1725d9eb10fb3e67e6e3b89aef1f4624078abbe55`，body28 SHA256 `fb6564a73166e8d9dc4d889861ff0b417b8f80454f2bc067f03d730cd744bec0`。Java 离线 build70任务、body28原生16夹具、正确HTTP入口及环境检查通过；它们不等于原生钱包/HUD/模型的实际游玩通过。
+
+实现了实际致死伤害归属的 Reaper 灵魂球与 Torb Scrap，补英雄 NPC/其他 LivingEntity，移除“附近 Monster 任意死就掉自己废料”的旧路径。三类物品（含护甲包）共用落地10秒一圈、0–0.05m浮动、3m吸附、LOS/方块/区块/边界检查、最终接触消费；灵魂球50OW→5MC回血，废料25/200，原生E耗50不二次扣镜像。作用域/死亡/停止清理，不生成持久物品实体。
+
+废料通过已有 body 逻辑线程上的原生 Set&Notify 写 entity变量0409；80-byte序列请求/回执、身份/新鲜度/类型/代码守卫、读回确认、重复/失败不重复入账，成功后才移除碎片。只镜像真实原生钱包，不做MC-only充值。实际新变量通知/HUD及T3第三次E仍待手测。
+
+**专用原版灵魂球/Scrap资产尚未认证**，已明确使用自制蓝色骷髅球/齿轮替代；两个包的 provenance 标记 authored-fallback，资源放在现有 D 盘根 `research/fix/T3-lab/mesh-assets/{reaper-soul,torb-scrap}`，未进源码/JAR。原版护甲包继续沿用。
+
+本轮25项源/构建/测试文件，7505个人档案SHA零差异，1560源码快照无无关变化；T4开始前用户已有的28项变化和2新增已保留并增量备份。完整根因/实现、SHA、资源来源和手测表见 [T-report.md](../research/fix/T-report.md) 的 T4 交付节；机器证据 `research/fix/T4-lab/evidence/closeout.json`，6个资产输入见 `research/fix/T4-rebuild-files.txt`。完成标记 `research/fix/T4-DONE.txt` 仅指代码构建交付。T3精确枪口像素等未验收项仍保留。
+
+
+## 2026-11-03 — T3 代码与构建交付，实机暂停待用户验收
+
+**以用户最新指示为准：只改代码、只构建，不启动 OW/MC、不改分辨率、不录视频、不操作鼠标键盘。** 本轮没有在此指示后恢复实机。旧会话已正常停止，无强杀；最终游戏/监督器/录制辅助进程为 0，桌面只读核对为 2560×1440@200Hz/32bpp。
+
+开发候选：guest JAR SHA256 `3f61554deacf9c3f95490d450a6c15b26c85e9f77d2b588f41a5bb119a9cef71`，六个 native owner **48/27/11/16/10/1**；v48 SHA256 `4d2178628f61a15353eaddaf542a8e7447d860cfb939c0e1525fa9176b8d1640`。原有另外五个 DLL 不变。Java 离线 build 69 tasks、正确 HTTP 契约入口、只读环境检查均通过，原生构建/分组手模 GPU 夹具通过；**没有最终构建实机通过结论**。
+
+已实现炮台枪管中点、统一视觉枪口层、护甲包落地旋转/30 秒生物 2 倍尺寸、Shift 预览/LMB 确认/取消、多组原生换弹手模合并；追加 Torb 大弹体/视觉慢速/火光、实际相机与坦克首帧延迟修正，以及放大毒雷/暴雪/脉冲和蓝色爆炸波。
+
+**枪口像素残差尚未实测，JSON 仍 verified=false；连续第三次 E 的原生 throw 条件尚未定位。** 最终 12 英雄、村民/NPC/自然恢复、新特效都等用户手测；不能把早期 kit/placement 或 T2 视频当作最终候选验收。
+
+个人档案 7503 项 SHA 零差异，原有源码 1626 项无无关变化。原设置已按字节恢复，launcher 仅保留 `paths.meshAssets=research/fix/T3-lab/mesh-assets`；私有资产不进源码/JAR。没有提交、没有重建 dist，dist 仍是旧包。`T3_live.py` 入口已禁用，全局手模 trace 已归档。
+
+完整九项根因/实现、12 英雄检查表、手测清单、产物 SHA、36 个资产重建输入见 [T-report.md](../research/fix/T-report.md) 的 T3 最终交付节；机器证据为 `research/fix/T3-lab/evidence/closeout.json`，源文件 SHA/diff 在同目录。`research/fix/T-DONE.txt` 标记的是本轮代码构建交付完成，实机验收仍待进行。
+
+
+## 2026-11-03 — T2 托比昂弹丸、红线、护甲包已实机完成
+
+开发guest JAR SHA256 `b60368b13b8a3b9da0c3f2e22c19cef3934232eee63a58a2ef8ca7a5cda2f9cb`；native仍47/27/11/16/10/1。
+原版0157→D0D铆钉体积模型已按真实MC扫掠呈现；02d0原版为瞬时霰弹，使用45%原网格作100ms体积残像，保留hitscan伤害语义。
+一级/二级/Core炮台的真实炮口→锁定目标红线、切换/丢失清线，原版02a1护甲包落地/本人拒绝/他人拾取/600tick超时，七项实机通过。
+T1九项回归与11英雄主武器/F5–F11/785语音烟测通过；天然树冠导致的无效首轮测试及修正已完整留证。
+可见像素/片段见`research/fix/T2-verification.mp4`（10秒）和768×624 JPEG对照图，详见`T-report.md`。
+
+当前`paths.meshAssets=research/fix/T2-lab/mesh-assets`，含新rivet及其余105包；该一项配置有意保留，其余launcher原值及个人世界选择已恢复。
+私有资产不在源码/JAR；未来整包输入28个文件及guest/六DLL的SHA见`research/fix/T2-rebuild-files.txt`。
+**dist未重建**，正式包仍46/26旧基线。不能把开发修复说成ZIP已更新。
+正常保存退出、无强杀/残留，桌面2560×1440@200；7499个人档案SHA零差异，无无关源码改动，无提交/删除。
+证据`research/fix/T2-lab/evidence/closeout.json`。不代表全英雄全技能或历史PLAYABLE-GOAL完成。
+
+
+## 2026-11-03 — 线程 T：托比昂五项阻塞已实机修复，通用双武器槽47/27
+
+开发仓库当前选择 **compositor47 / body27 / gate11 / emission16 / bootstrap10 / spawn1**。
+根因是离线创建路径把武器数组槽1/2的原生脚本参数1c都初始化为0，当前选槽1f也为0：默认两武器同时显示，1/2后两图都退出。
+新增 `native_weapon_slots.hpp`，在现有body逻辑owner按实际STU武器数组初始化索引和默认选槽，并调用原版Set&Notify；
+输入例外使用当前已初始化多武器元数据证明，不再特判托比昂。天使0004同路夹具通过，但本轮未实机验收天使，完整辅助技能/MC手枪绑定仍需独立工作。
+
+`research/fix/T-lab/evidence/accept-04/result.json` 的9项全部通过：默认仅枪，2锤击真实怪物并得50废料、
+1枪左键20→19/目标20→14.5、右键19→14/目标20→10，一级炮台锤升二级、250→300修理，12次切换，
+实际Shift/E/Q和Core自然End。此Beta原版右键声明耗弹5；建造预览需正常RMB取消，E不取消。
+护甲包现有源码的投掷者排除逻辑实机通过：本人W走过包仍在，真实村民接同一包获得7.5MC吸收。
+当前guest build SHA仍为 `1666e58f84d218e31883c06e51cf1e08d1a7fe4e266d2ce8fa9fec1515dae2f5`。
+
+`regress-01` 其余11英雄均在1/2后主武器对MC造成伤害；F5–F11实际菜单/飞行/补能烟测通过，语音785/785、missing0、error空，准确双进程原声保留。
+原生构建夹具、Java67任务、Python相关检查及正确HTTP入口通过。未声称11英雄全部技能/长时游玩或历史PLAYABLE-GOAL完成。
+
+正常Stop已保存世界并退出：无游戏/监督器/录制辅助残留，无强杀，桌面恢复 **2560×1440@200**。
+开发档案7499项SHA比较零差异，1442项源码检查无无关改动，设置和launcher配置恢复原字节；
+`T-lab/evidence/closeout.json`、`T-report.md` 留证。交付 `research/fix/T-verification.mp4`（9秒）及768×708 JPEG对照图。
+**dist未重建，下面线程I的正式包仍是46/26，不能把开发修复说成已更新ZIP。** 没有Git提交或删除文件。
+
 ## 2026-11-03 — 线程 I 一键整包验收完成，正式 ZIP 已生成
 
 最新稳定出厂包 `data/oneclick-final-20261103-015311/OWMC-1.0.0` 已完整重新构建，

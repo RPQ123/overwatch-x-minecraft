@@ -21,7 +21,8 @@ public final class NativeHanzoSkillController implements AutoCloseable {
         var scope=new NativeHanzoSkillRuntime.Scope(c.player.getUuid(),world,h.generation(),model);var server=c.getServer();
         long sc=s.entries().get("scatter").tick(),dr=s.entries().get("dragon").tick();
         if(lastScatter<0||lastDragon<0){lastScatter=sc;lastDragon=dr;return;}
-        if(sc>lastScatter){lastScatter=sc;var parameters=scatterContext.poll(h,model,sc);server.execute(()->NativeHanzoSkillRuntime.scatter(server,scope,parameters));}
+            if(sc>lastScatter){lastScatter=sc;var parameters=scatterContext.poll(h,model,sc);String launch="hanzo-parent:"+h.generation()+":"+model+":"+sc;
+                NativeMuzzleOrigins.thrown(c,h,launch,hero,c.player.getEyePos(),false);server.execute(()->NativeHanzoSkillRuntime.scatter(server,scope,parameters,launch));}
         if(dr>lastDragon){lastDragon=dr;long begin=HanzoControlController.nativeBegin();server.execute(()->NativeHanzoSkillRuntime.dragon(server,scope,begin));}
     }
     void resetSession(){HanzoControlController.reset();reader.close();qCast.close();scatterContext.close();lastScatter=lastDragon=-1;frame=frameWall=0;scopeSource=scopeModel=scopeWorld=0;error="";}

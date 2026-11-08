@@ -3,6 +3,7 @@
   <h1>Overwatch × Minecraft</h1>
   <p><strong>Original Overwatch heroes in a real Minecraft world.</strong></p>
   <p><a href="README.md">简体中文</a> · English · <a href="#download">Download</a> · <a href="docs/PLAYER-README.md">Player guide (Chinese)</a> · <a href="docs/BUILDING.md">Build guide</a></p>
+  <p><a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License for project code"></a></p>
 </div>
 
 This project connects the **2016 offline Overwatch beta 0.8.0.24919** with **Minecraft 1.21.1**. Overwatch provides the heroes, weapons, animations, HUD, and sound. Minecraft provides the terrain, creatures, movement, collision, and saves. You play in the Overwatch window.
@@ -24,20 +25,23 @@ Full trailer: link pending. [Media sources](docs/media/README.md).
 
 ## Features
 
-- **Twelve heroes:** original first-person models, weapon animations, HUD, and sound, with abilities that affect Minecraft creatures and terrain.
+- **Fourteen heroes.** Roadhog and Winston join the roster with original first-person models, weapon animations, HUD, and sound.
 - **A real world:** Minecraft handles exploration, movement, block collision, dimension travel, and saves.
 - **In-game menus:** toggle flight, adjust time, build portals, summon mobs, travel to Boss areas, and refill ability resources.
 - **Twilight Forest and shaders:** use installed dimension mods and optional Iris / MakeUp shaders.
 - **One launcher:** load the world and hero picker automatically, then save the world when you stop.
 
-The development version also includes **F5 hero training NPC summons, survival / invulnerability switching, and Mei’s ice wall fix**, planned for the next package.
+- **F5 and survival.** Summon training NPCs for all 14 heroes and toggle survival or invulnerability. Player heroes and training NPCs are immune to fall damage.
+- **Health sync on hit.** Native health reads and writes run in the background to reduce main-thread waits on hit. In-game performance awaits a retest.
 
 ## Download
 
 <!-- DOWNLOAD_LINKS -->
-**OWMC-1.0.0 package (~5 GB): download link pending.**
+**OWMC v1.0.0 package (`OWMC-1.0.0.zip`, 5.46 GB).** Download link pending.
 
-Mirror: pending · SHA256 file: pending.
+This download section is for the package rebuilt from current development, including the hero and survival updates.
+
+Mirror pending · SHA256: `8b4069c050b40af85574fa1d0fb94c9e5a8009b6616946227e6f13cb3318c226`
 <!-- /DOWNLOAD_LINKS -->
 
 ## Quick start
@@ -66,7 +70,7 @@ Keep the Overwatch window focused. Some laptops require `Fn` for function keys.
 | R / V | Reload / melee |
 | Shift / E / Q | Hero abilities / ultimate |
 | H | Return to the hero picker |
-| F5 | Hero summons / survival mode (development) |
+| F5 | Hero summons / survival mode |
 | F6 / F7 | Flight / world settings |
 | F8 / F9 | Portals / mob summons |
 | F10 / F11 | Boss destinations / ability resource refill |
@@ -75,9 +79,9 @@ Use number keys or the numeric keypad to select menu items. Follow the on-screen
 
 ## Hero restoration progress
 
-**12 heroes, 78 abilities and mechanics: ✅ 69 restored · 🚧 2 partial · ❌ 7 not restored.**
+**14 heroes and 89 abilities and mechanics. ✅ 76 restored · 🧪 4 implemented, awaiting in-game checks · 🚧 7 partial · ❌ 2 not restored.**
 
-These are the latest development results, including primary and secondary fire, passives, melee, and movement mechanics. Mei’s ice wall is fixed; the existing `1.0.0` package awaits the update. [Status notes and icon sources](docs/media/README.md#技能状态与图标来源).
+✅ marks gameplay with in-game evidence, 🧪 marks implementation with offline checks, and 🚧 marks partial coverage. The tables flag any newer behavior that still needs an in-game check. [Status notes and icon sources](docs/media/README.md#技能状态与图标来源).
 
 ### <img src="docs/media/heroes/genji/portrait.png" width="32" height="32" alt="Genji"> Genji
 
@@ -130,7 +134,7 @@ These are the latest development results, including primary and secondary fire, 
 | <img src="docs/media/heroes/reaper/wraith-form.png" width="32" height="32" alt="Wraith Form"> | Wraith Form | Shift + W | ✅ Restored |
 | <img src="docs/media/heroes/reaper/shadow-step.png" width="32" height="32" alt="Shadow Step"> | Shadow Step | E → LMB to confirm | ✅ Restored |
 | <img src="docs/media/heroes/reaper/death-blossom.png" width="32" height="32" alt="Death Blossom"> | Death Blossom | Q | ❌ Not restored |
-| <img src="docs/media/heroes/reaper/the-reaping.png" width="32" height="32" alt="The Reaping"> | The Reaping | Kill an enemy → W to collect a soul | ✅ Restored |
+| <img src="docs/media/heroes/reaper/the-reaping.png" width="32" height="32" alt="The Reaping"> | The Reaping | Approach the soul after a kill | ✅ Restored · healing tested, victim head visuals await checks |
 | <img src="docs/media/heroes/reaper/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
 ### <img src="docs/media/heroes/soldier76/portrait.png" width="32" height="32" alt="Soldier: 76"> Soldier: 76
@@ -200,46 +204,71 @@ These are the latest development results, including primary and secondary fire, 
 
 ### <img src="docs/media/heroes/mei/portrait.png" width="32" height="32" alt="Mei"> Mei
 
-6/6 restored
+5/6 restored · 1 partial
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
 | <img src="docs/media/heroes/mei/endothermic-blaster.png" width="32" height="32" alt="Endothermic Blaster"> | Endothermic Blaster | Hold LMB | ✅ Restored |
-| <img src="docs/media/heroes/mei/icicle.png" width="32" height="32" alt="Endothermic Blaster (Icicle)"> | Endothermic Blaster (Icicle) | RMB | ✅ Restored |
+| <img src="docs/media/heroes/mei/icicle.png" width="32" height="32" alt="Endothermic Blaster (Icicle)"> | Endothermic Blaster (Icicle) | RMB | ✅ Restored · original icicle mesh, wall embedding and fade await in-game checks |
 | <img src="docs/media/heroes/mei/cryo-freeze.png" width="32" height="32" alt="Cryo-Freeze"> | Cryo-Freeze | Shift | ✅ Restored |
-| <img src="docs/media/heroes/mei/ice-wall.png" width="32" height="32" alt="Ice Wall"> | Ice Wall | E → LMB to confirm | ✅ Restored (development) |
+| <img src="docs/media/heroes/mei/ice-wall.png" width="32" height="32" alt="Ice Wall"> | Ice Wall | E to preview, left click to place, E / right click to cancel | 🚧 Partial · placement tested, widened original five-pillar wall and repeated casts await checks |
 | <img src="docs/media/heroes/mei/blizzard.png" width="32" height="32" alt="Blizzard"> | Blizzard | Q | ✅ Restored |
 | <img src="docs/media/heroes/mei/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
 ### <img src="docs/media/heroes/torbjorn/portrait.png" width="32" height="32" alt="Torbjörn"> Torbjörn
 
-5/10 restored · 5 not restored
+9/10 restored · 1 partial
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
-| <img src="docs/media/heroes/torbjorn/rivet-gun.png" width="32" height="32" alt="Rivet Gun"> | Rivet Gun | 1 → LMB | ❌ Not restored |
-| <img src="docs/media/heroes/torbjorn/rivet-gun-secondary.png" width="32" height="32" alt="Rivet Gun (Secondary Fire)"> | Rivet Gun (Secondary Fire) | 1 → RMB | ❌ Not restored |
-| <img src="docs/media/heroes/torbjorn/build-turret.png" width="32" height="32" alt="Build Turret"> | Build Turret | Aim at the ground: Shift | ✅ Restored |
-| <img src="docs/media/heroes/torbjorn/armor-pack.png" width="32" height="32" alt="Armor Pack"> | Armor Pack | E | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/rivet-gun.png" width="32" height="32" alt="Rivet Gun"> | Rivet Gun | 1 → LMB | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/rivet-gun-secondary.png" width="32" height="32" alt="Rivet Gun (Secondary Fire)"> | Rivet Gun (Secondary Fire) | 1 → RMB | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/build-turret.png" width="32" height="32" alt="Build Turret"> | Build Turret | Shift to preview, left click to place, right click to cancel | 🚧 Partial · initial placement tested, repeat placement and hand pose fixes await checks |
+| <img src="docs/media/heroes/torbjorn/armor-pack.png" width="32" height="32" alt="Armor Pack"> | Armor Pack | E | ✅ Restored · pickup, armor and growth tested, repeat refresh and full-bright rendering await checks |
 | <img src="docs/media/heroes/torbjorn/molten-core.png" width="32" height="32" alt="Molten Core"> | Molten Core | Q | ✅ Restored |
-| <img src="docs/media/heroes/torbjorn/forge-hammer.png" width="32" height="32" alt="Forge Hammer"> | Forge Hammer | 2 → LMB | ❌ Not restored |
-| <img src="docs/media/heroes/torbjorn/turret-repair.png" width="32" height="32" alt="Forge Hammer (Repair)"> | Forge Hammer (Repair) | 2 → LMB on a damaged turret | ❌ Not restored |
-| <img src="docs/media/heroes/torbjorn/turret-upgrade.png" width="32" height="32" alt="Forge Hammer (Upgrade)"> | Forge Hammer (Upgrade) | 2 → LMB on a level 1 turret | ❌ Not restored |
-| <img src="docs/media/heroes/torbjorn/scrap-collector.png" width="32" height="32" alt="Scrap Collector"> | Scrap Collector | Kill an enemy → W to collect scrap | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/forge-hammer.png" width="32" height="32" alt="Forge Hammer"> | Forge Hammer | 2 → LMB | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/turret-repair.png" width="32" height="32" alt="Forge Hammer (Repair)"> | Forge Hammer (Repair) | 2 → LMB on a damaged turret | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/turret-upgrade.png" width="32" height="32" alt="Forge Hammer (Upgrade)"> | Forge Hammer (Upgrade) | 2 → LMB on a level 1 turret | ✅ Restored |
+| <img src="docs/media/heroes/torbjorn/scrap-collector.png" width="32" height="32" alt="Scrap Collector"> | Scrap Collector | Approach scrap after a kill | ✅ Restored · drops on kills, attracts nearby scrap, and credits native scrap |
 | <img src="docs/media/heroes/torbjorn/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
 
 ### <img src="docs/media/heroes/widowmaker/portrait.png" width="32" height="32" alt="Widowmaker"> Widowmaker
 
-6/6 restored
+5/6 restored · 1 partial
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
 | <img src="docs/media/heroes/widowmaker/widows-kiss.png" width="32" height="32" alt="Widow’s Kiss (Automatic)"> | Widow’s Kiss (Automatic) | LMB | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/widows-kiss-scoped.png" width="32" height="32" alt="Widow’s Kiss (Scoped)"> | Widow’s Kiss (Scoped) | Hold RMB → LMB | ✅ Restored |
-| <img src="docs/media/heroes/widowmaker/grappling-hook.png" width="32" height="32" alt="Grappling Hook"> | Grappling Hook | Face a climbable wall: Shift | ✅ Restored |
+| <img src="docs/media/heroes/widowmaker/grappling-hook.png" width="32" height="32" alt="Grappling Hook"> | Grappling Hook | Shift to fire, Shift or Space to release early | 🚧 Partial · grapple tested, native 12-second cooldown and aerial momentum await checks |
 | <img src="docs/media/heroes/widowmaker/venom-mine.png" width="32" height="32" alt="Venom Mine"> | Venom Mine | E | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/infra-sight.png" width="32" height="32" alt="Infra-Sight"> | Infra-Sight | Q | ✅ Restored |
 | <img src="docs/media/heroes/widowmaker/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
+
+### <img src="docs/media/heroes/roadhog/portrait.png" width="32" height="32" alt="Roadhog"> Roadhog
+
+5/6 restored · 1 partial
+
+| Icon | Ability | Input | Status |
+| :---: | --- | --- | --- |
+| <img src="docs/media/heroes/roadhog/scrap-gun.png" width="32" height="32" alt="Scrap Gun"> | Scrap Gun | Left click | ✅ Restored · spread, ammo and reload tested |
+| <img src="docs/media/heroes/roadhog/scrap-gun-secondary.png" width="32" height="32" alt="Scrap Gun secondary fire"> | Scrap Gun secondary fire | Right click | ✅ Restored · close hit and distant split tested, second burst sound awaits checks |
+| <img src="docs/media/heroes/roadhog/chain-hook.png" width="32" height="32" alt="Chain Hook"> | Chain Hook | Shift | ✅ Restored · hits and pulls tested, left-hand chain and sustained pull await checks |
+| <img src="docs/media/heroes/roadhog/take-a-breather.png" width="32" height="32" alt="Take a Breather"> | Take a Breather | E | ✅ Restored · healing, damage reduction and movement lock tested |
+| <img src="docs/media/heroes/roadhog/whole-hog.png" width="32" height="32" alt="Whole Hog"> | Whole Hog | Q | 🚧 Partial · sustained fire and knockback tested, projectile and muzzle visuals await checks |
+| <img src="docs/media/heroes/roadhog/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | ✅ Restored |
+
+### <img src="docs/media/heroes/winston/portrait.png" width="32" height="32" alt="Winston"> Winston
+
+0/5 restored · 4 implemented, awaiting in-game checks · 1 partial
+
+| Icon | Ability | Input | Status |
+| :---: | --- | --- | --- |
+| <img src="docs/media/heroes/winston/tesla-cannon.png" width="32" height="32" alt="Tesla Cannon"> | Tesla Cannon | Hold left click | 🧪 Implemented · native ammo, arcs and damage await in-game checks |
+| <img src="docs/media/heroes/winston/jump-pack.png" width="32" height="32" alt="Jump Pack"> | Jump Pack | Shift | 🧪 Implemented · launch, landing damage and cooldown sync await in-game checks |
+| <img src="docs/media/heroes/winston/barrier-projector.png" width="32" height="32" alt="Barrier Projector"> | Barrier Projector | E | 🧪 Implemented · original blue hex mesh and projectile blocking await in-game checks |
+| <img src="docs/media/heroes/winston/primal-rage.png" width="32" height="32" alt="Primal Rage"> | Primal Rage | Q | 🚧 Partial · temporary health and punches implemented, native transformation and HUD await checks |
+| <img src="docs/media/heroes/winston/melee.png" width="32" height="32" alt="Quick Melee"> | Quick Melee | V | 🧪 Implemented · shared melee path awaits in-game checks |
 
 ## How it works and development
 
@@ -249,6 +278,6 @@ Development requires Windows x64, Python 3.13, JDK 21, Gradle 8.10.2, and MinGW-
 
 ## Credits and license
 
-Thanks to [Universal Modder](https://github.com/rehan-remade/universal-modder) for the two-process approach, [Prometheus](https://github.com/saturn-xvi/prometheus) for offline-client research, and Fabric, Twilight Forest, Sodium, Iris, and the other open-source components. Developed with assistance from Claude / Codex.
+Thanks to [Universal Modder](https://github.com/rehan-remade/universal-modder) for the [two-process approach](https://github.com/rehan-remade/universal-modder/tree/main/skills/mashup-mods), [Prometheus](https://github.com/saturn-xvi/prometheus) for offline-client research, and Fabric, Twilight Forest, Sodium, Iris, and the other open-source components. Developed with assistance from Claude / Codex.
 
 Project-owned code is licensed under the [MIT License](LICENSE), copyright **2026 RPQ123**. Third-party code and assets retain their own licenses; see [third-party notices](THIRD_PARTY_NOTICES.md) and [component details](docs/THIRD-PARTY.md).

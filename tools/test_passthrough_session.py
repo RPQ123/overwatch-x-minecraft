@@ -82,6 +82,13 @@ class HeroRefreshTests(unittest.TestCase):
         meter_patch=patch.object(session,'prepare_meter');self.meter=meter_patch.start();self.addCleanup(meter_patch.stop)
         melee_patch=patch.object(session,'prepare_melee');self.melee=melee_patch.start();self.addCleanup(melee_patch.stop)
         sustain_patch=patch.object(session,'prepare_sustain');self.sustain=sustain_patch.start();self.addCleanup(sustain_patch.stop)
+        health_patch=patch.object(session,'prepare_health');self.health=health_patch.start();self.addCleanup(health_patch.stop)
+    def test_health_binding_failure_cannot_cache_current_pawn(self):
+        hero=0x02e000000000006e;body=dict(pid=42,probeVersion=session.BODY_VERSION,enabled=True,failures=0,hero=hero,modelId=9)
+        refresh=session.HeroBindingRefresh()
+        with patch.object(session,'ResearchProcess'),patch.object(session,'prepare_biotic'),patch.object(session,'prepare_locomotion',return_value=dict(hero=hero,modelId=9)),patch.object(session,'prepare_health',side_effect=[ValueError('health settling'),{}]) as health:
+            with self.assertRaisesRegex(ValueError,'health settling'):refresh.refresh(42,body)
+            self.assertIsNone(refresh.identity);self.assertTrue(refresh.refresh(42,body));self.assertEqual(health.call_count,2)
     def test_mei_and_bastion_rebind_sustain_after_model_and_dimension_change(self):
         body={'pid':42,'probeVersion':session.BODY_VERSION,'enabled':True,'failures':0,'hero':0x02e0000000000015,'modelId':9,'worldId':1}
         refresh=session.HeroBindingRefresh()

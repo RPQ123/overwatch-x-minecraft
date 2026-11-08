@@ -727,6 +727,8 @@ public final class NativeCombatScene {
         if(state.isOf(Blocks.STONE)||state.isOf(Blocks.OBSIDIAN)||state.isOf(Blocks.BEDROCK)||state.isOf(Blocks.GLASS))world.setBlockState(e.getKey(),e.getValue());
     }blocks.clear();}
     public static void cleanup(){
+        MuzzlePresentation.retire(System.currentTimeMillis());
+        TorbRivetPresentation.retireForFixtureCleanup(System.currentTimeMillis());
         SupportCommitFixtures.cleanup();
         SymmetraLab.cleanup();
         // integrator: idempotent with explicit HTTP/close cleanup; also reclaim on fixture switches.

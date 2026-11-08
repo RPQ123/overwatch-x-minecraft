@@ -17,6 +17,7 @@
 #include "tracer_viewmodel_lens.hpp"
 #include "native_local_hero.hpp"
 #include "native_slot_filter.hpp"
+#include "native_weapon_slots.hpp"
 #ifndef OWMC_LIVE_VERSION
 #define OWMC_LIVE_VERSION 31
 #endif
@@ -74,7 +75,7 @@ bool hanzoMotionScope();
 bool controlMotionScope();
 bool slotFilterScope();
 void revokeHanzoControls();
-bool torbWeaponSelectionScope();
+bool nativeWeaponSelectionScope();
 unsigned nativeViewMode();
 bool slotInputScope(){CURSORINFO cursor{sizeof(CURSORINFO),0,nullptr,{0,0}};return active&&viewMode==1&&GetForegroundWindow()==inputWindow&&GetCursorInfo(&cursor)&&!(cursor.flags&CURSOR_SHOWING);}
 LRESULT CALLBACK movementMessages(HWND w,UINT message,WPARAM key,LPARAM data) {
@@ -144,6 +145,7 @@ void hideProvidedDebugUi() {
 ComPtr<ID3D11Texture2D> handDepth;
 ComPtr<ID3D11Texture2D> lastPresented;
 bool handBefore=false,handAfter=false,handInvalid=false,frameBlended=false;
+unsigned handGroups=0;
 HandMaskTrace handMaskTrace; // Opt-in at cold attach; no extra stage queries in ordinary play.
 std::shared_ptr<const WorldFrame> latestWorld;
 std::array<HostPose,256> poseHistory{};
@@ -155,13 +157,13 @@ std::atomic<uint64_t> maxPoseAge{0},lastMcFrame{0},lastMcGeneration{0};
 template<class T> bool read(uintptr_t a,T& v) {SIZE_T n=0;return a>=0x10000&&a<0x7fffffffffffULL&&ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(a),&v,sizeof v,&n)&&n==sizeof v;}
 uintptr_t pointer(uintptr_t a) {uintptr_t p=0;return read(a,p)?p:0;}
 // integrator/builders: the WndProc and existing filter need the same narrow gate.
-bool torbWeaponSelectionScope(){
+bool nativeWeaponSelectionScope(){
     if(fixture||!slotInputScope()||deadeyeMotionScope()||nativeViewMode()!=1)return false;
     auto base=reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr)),admin=pointer(base+0x17b7f90);
     thread_local NativeLocalHero hero;
     auto readBytes=[](uintptr_t at,void* out,size_t size){SIZE_T n=0;return at>=0x10000&&at<0x7fffffffffffULL
         &&ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(at),out,size,&n)&&n==size;};
-    return hero.refresh(admin,readBytes)&&hero.hero==0x02e0000000000006ULL
+    return hero.refresh(admin,readBytes)&&nativeWeaponSelectionReady(base,admin,hero,readBytes)
         &&admin==pointer(base+0x17b7f90)&&nativeViewMode()==1&&slotInputScope()&&!deadeyeMotionScope();
 }
 bool deadeyeMotionScope(){
@@ -399,9 +401,12 @@ void observeHands() {
     if(!active||handInvalid||frameBlended||viewMode==2) return;
     ComPtr<ID3D11Texture2D> depth;
     if(isHand(depth)) {
-        if(handAfter) {handMaskTrace.resumed();handInvalid=true;return;} // Never merge separated first-person groups.
         if(!blender) {ComPtr<ID3D11Device> device;context->GetDevice(device.GetAddressOf());blender=std::make_unique<LiveWorldBlend>(device.Get());}
-        if(!handBefore) {handMaskTrace.start();handDepth=depth;blender->captureBefore(depth.Get());handBefore=true;}
+        if(!handBefore||handAfter) {
+            if(handAfter)handMaskTrace.resumed();
+            if(++handGroups>8){handInvalid=true;return;}
+            handMaskTrace.start();handDepth=depth;blender->captureBefore(depth.Get());handBefore=true;handAfter=false;
+        }
         else if(handDepth.Get()!=depth.Get()) {handMaskTrace.depthChanged();handInvalid=true;}
     } else if(handBefore&&!handAfter) {blender->captureAfter(handDepth.Get());handAfter=true;handDepth.Reset();}
 }
@@ -419,6 +424,7 @@ void blendAtHud(ID3D11DeviceContext* c,ID3D11DepthStencilView* dsv,UINT flags) {
         ComPtr<ID3D11Resource> depthResource;dsv->GetResource(depthResource.GetAddressOf());ComPtr<ID3D11Texture2D> depth;
         gpuCheck(depthResource.As(&depth),"selection scene depth");blender->captureSelection(depth.Get());
     }
+    if(!selection&&!handInvalid&&handBefore&&!handAfter&&handDepth){blender->captureAfter(handDepth.Get());handAfter=true;handDepth.Reset();}
     bool preserveHand=blender->ready()&&(selection||(!handInvalid&&handBefore&&handAfter));if(!preserveHand)unmaskedFrames++;
     handMaskTrace.decision(handBefore,handAfter,handInvalid,preserveHand);
     auto current=std::atomic_load(&latestPose);auto image=std::atomic_load(&latestWorld);
@@ -564,7 +570,7 @@ HRESULT WINAPI present(IDXGISwapChain* s,UINT interval,UINT flags) {
         if(captured&&!frameBlended) incompleteHands++;
         if(!frameBlended)handMaskTrace.decision(handBefore,handAfter,handInvalid,false);
         handMaskTrace.finish(frames.load()+1,unixMillis(),viewMode);
-        handDepth.Reset();handBefore=false;handAfter=false;handInvalid=false;frameBlended=false;if(blender) blender->beginFrame();
+        handDepth.Reset();handBefore=false;handAfter=false;handInvalid=false;handGroups=0;frameBlended=false;if(blender) blender->beginFrame();
 #endif
         frames++;captured=false;
         if(!fixture)viewMode=nativeViewMode();
@@ -628,7 +634,7 @@ bool attach(IDXGISwapChain* s) {
     if(!fixture){viewLightMapId=lightBackingScene();fixedViewLight=viewLightMapId!=0;}
 #endif
     if(!fixture){auto library=GetModuleHandleW(L"minhook.x64.dll");wchar_t location[32768]{},exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);
-        if(!library||!GetModuleFileNameW(library,location,32768)||_wcsicmp(location,(std::filesystem::path(exe).parent_path()/L"minhook.x64.dll").c_str())||!nativeSlotFilter.start(slotFilterScope,library,controlMotionScope,torbWeaponSelectionScope)){stop();return reject("native slot input filter");}}
+        if(!library||!GetModuleFileNameW(library,location,32768)||_wcsicmp(location,(std::filesystem::path(exe).parent_path()/L"minhook.x64.dll").c_str())||!nativeSlotFilter.start(slotFilterScope,library,controlMotionScope,nativeWeaponSelectionScope)){stop();return reject("native slot input filter");}}
 #ifdef OWMC_LIVE_BLEND
     std::error_code traceError;wchar_t tracePath[32768]{};bool traceRequested=false;
     if(!fixture&&GetModuleFileNameW(moduleHandle,tracePath,32768)){

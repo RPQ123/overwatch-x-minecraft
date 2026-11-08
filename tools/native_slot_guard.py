@@ -4,9 +4,9 @@ Windows low-level input filtering in the existing supervisor, not a game hook
 or a second native callback owner. Other applications (including MC) pass through.
 The OS releases these hooks when the supervisor exits.
 """
-import ctypes,threading,atexit
+import ctypes,threading,atexit,json,time
 from ctypes import wintypes as W
-from observe_overwatch import ResearchProcess, PoseReader
+from observe_overwatch import ResearchProcess, PoseReader, ROOT
 
 def slot_input(kind,message,key=0):
     return (kind=='key' and message in (0x100,0x101,0x104,0x105) and (0x30<=key<=0x39 or 0x60<=key<=0x69)) or (kind=='mouse' and message in (0x20a,0x20e,0x207,0x208))
@@ -14,7 +14,14 @@ def slot_input(kind,message,key=0):
 class CursorInfo(ctypes.Structure):
     _fields_=[('cbSize',W.DWORD),('flags',W.DWORD),('hCursor',W.HANDLE),('ptScreenPos',W.POINT)]
 
-def torb_weapon_selection(reader):
+def weapon_report_ready(report,pid,model,hero,now):
+    return (report.get('pid')==pid and report.get('hero')==hero and report.get('modelId')==model
+            and report.get('probeVersion',0)>=27 and report.get('enabled') is True and not report.get('failures')
+            and report.get('weaponSlotModel')==model and report.get('weaponSlotCount',0)>=2
+            and report.get('weaponSlotSelected') in (1,2) and not report.get('weaponSlotRefused')
+            and 0<=now-report.get('weaponSlotWallMs',0)<=1500)
+
+def native_weapon_selection(reader):
     """Fresh positive FPS/controller/model proof; failure keeps slot filtering."""
     process=reader.memory;admin=reader.pointer(process.base+0x17b7f90)
     local,=reader.unpack('<I',admin+0x220)
@@ -28,13 +35,22 @@ def torb_weapon_selection(reader):
     if not 1<=count<=capacity<=256:return False
     component=reader.pointer(pointers);camera=reader.pointer(component+0x40)
     active=reader.pointer(camera+0x260);default=reader.pointer(component+0x50)
-    return (hero==0x02e0000000000006 and active==default
+    # The existing native logic owner derives slot indices from the actual
+    # weapon definition array. A hero ID alone never grants slot input.
+    pid=process_pid(process)
+    report=json.loads((ROOT/f'native-host/build/body-sync-{pid}.json').read_text(encoding='utf-8'))
+    ready=weapon_report_ready(report,pid,model,hero,time.time()*1000)
+    return (ready and active==default
             and reader.pointer(active)==process.base+0x15c7000
             and reader.pointer(process.base+0x17b7f90)==admin
             and reader.unpack('<I',admin+0x220)[0]==local
             and reader.unpack('<I',reference+0x94)[0]==model
             and reader.unpack('<Q',info+0x98)[0]==hero
             and reader.pointer(camera+0x260)==active)
+
+def process_pid(process):
+    process.kernel.GetProcessId.argtypes=[W.HANDLE];process.kernel.GetProcessId.restype=W.DWORD
+    return process.kernel.GetProcessId(process.handle)
 
 class NativeSlotGuard:
     def __init__(self,pid):
@@ -66,12 +82,12 @@ class NativeSlotGuard:
     def _target(self):
         pid=W.DWORD();window=self.user.GetForegroundWindow();self.user.GetWindowThreadProcessId(window,ctypes.byref(pid))
         return pid.value==self.pid and self.kernel.WaitForSingleObject(self.handle,0)==0x102 and window==self.user.GetForegroundWindow()
-    def _torb_selection(self,key):
+    def _weapon_selection(self,key):
         if key not in (0x31,0x32):return False
         try:
             cursor=CursorInfo();cursor.cbSize=ctypes.sizeof(cursor)
             allowed=(self.user.GetCursorInfo(ctypes.byref(cursor)) and not cursor.flags&1
-                     and torb_weapon_selection(self.reader) and self._target())
+                     and native_weapon_selection(self.reader) and self._target())
             if allowed:self.allowed_weapons+=1
             return bool(allowed)
         except (OSError,ValueError,RuntimeError):return False
@@ -84,7 +100,7 @@ class NativeSlotGuard:
         def key(code,msg,data):
             if code>=0:
                 vk=ctypes.cast(data,ctypes.POINTER(W.DWORD))[0]
-                if slot_input('key',msg,vk) and self._target() and not self._torb_selection(vk):self.keys+=1;return 1
+                if slot_input('key',msg,vk) and self._target() and not self._weapon_selection(vk):self.keys+=1;return 1
             return self.user.CallNextHookEx(None,code,msg,data)
         def mouse(code,msg,data):
             if code>=0 and slot_input('mouse',msg) and self._target():self.mouse+=1;return 1

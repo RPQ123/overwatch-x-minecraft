@@ -9,18 +9,21 @@ class LiveWorldBlend {
     ComPtr<ID3D11Device> device;
     ComPtr<ID3D11DeviceContext> context,commands;
     ComPtr<ID3D11VertexShader> vs;
-    ComPtr<ID3D11PixelShader> ps;
+    ComPtr<ID3D11PixelShader> ps,maskPs;
+    ComPtr<ID3D11BlendState> maskMax;
     ComPtr<ID3D11RasterizerState> raster;
     ComPtr<ID3D11Buffer> constants;
-    ComPtr<ID3D11Texture2D> beforeDepth,afterDepth,nativeColor,guestColor;
-    ComPtr<ID3D11ShaderResourceView> beforeView,afterView,nativeView,guestView;
+    ComPtr<ID3D11Texture2D> beforeDepth,afterDepth,nativeColor,guestColor,handMask;
+    ComPtr<ID3D11ShaderResourceView> beforeView,afterView,nativeView,guestView,maskView;
+    ComPtr<ID3D11RenderTargetView> maskTarget;
     UINT width=0,height=0,guestWidth=0,guestHeight=0;
     DXGI_FORMAT colorFormat=DXGI_FORMAT_UNKNOWN;
     uint64_t sourceGeneration=0,sourceFrame=0;
-    bool before=false,after=false;
+    bool before=false,after=false,maskReady=false;
     unsigned allocations=0,uploads=0;
     void assertOwner() const;
     void depthSize(ID3D11Texture2D* source);
+    void accumulateMask();
 public:
     explicit LiveWorldBlend(ID3D11Device* input);
     void beginFrame();

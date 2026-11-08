@@ -70,13 +70,15 @@ final class VenomMineRenderer {
         if(v==null||client.player==null||client.world==null||client.getServer()==null||ctx.matrixStack()==null
             ||!v.owner().equals(client.player.getUuid())||v.world()!=NativeWorldIdentity.of(client.getServer(),client.world.getRegistryKey())
             ||now-v.wall()>250)return;
-        var at=v.at();if(!client.world.isChunkLoaded(BlockPos.ofFloored(at)))return;
+        var at=v.stuck()?v.at():NativeMuzzleOrigins.at(v.visualId(),v.at());if(!client.world.isChunkLoaded(BlockPos.ofFloored(at)))return;
         if(v.spider()){WidowSpiderRenderer.renderFlying(ctx,v);return;}
         if(!attempted){attempted=true;try{load(client);}catch(Exception failure){error=failure.toString();System.err.println("OWMC original Venom Mine model unavailable: "+error);}}
         if(!ready)return;
         var normal=v.normal().normalize();
+        if(v.stuck())at=at.add(normal.multiply(.06*(T3VisualTuning.VENOM_SCALE-1)));
         var matrices=ctx.matrixStack();var camera=ctx.camera().getPos();matrices.push();
         matrices.translate(at.x-camera.x,at.y-camera.y,at.z-camera.z);
+        matrices.scale(T3VisualTuning.VENOM_SCALE,T3VisualTuning.VENOM_SCALE,T3VisualTuning.VENOM_SCALE);
         matrices.multiply(new Quaternionf().rotationTo(0,1,0,(float)normal.x,(float)normal.y,(float)normal.z));
         // Facing follows the throw; while flying the mine tumbles slowly (presentation only).
         matrices.multiply(RotationAxis.POSITIVE_Y.rotationDegrees(-v.yaw()+(v.stuck()?0:v.age()*24f)));

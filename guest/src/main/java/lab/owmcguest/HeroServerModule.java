@@ -6,6 +6,7 @@ import net.minecraft.server.MinecraftServer;
 public interface HeroServerModule {
     void tick(MinecraftServer server);
     void resetSession();
+    default void revalidateSession(java.util.UUID player,long world,long hero,long model,long source){resetSession();}
     default void clear(){resetSession();}
     /** /combat 诊断里的键名（如 "mercy"）与当前状态 JSON。 */
     String statusKey();

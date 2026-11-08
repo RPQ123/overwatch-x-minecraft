@@ -376,11 +376,12 @@ class Builder:
         return dict(directory=PROFILE_DIRECTORY,mods=mods,personalFilesCopied=False,worldCreated=False,
                     worldCreation='first normal guest launch',worldName='Overwatch World',worldSeed=20261014)
 
-    def stage(self, python_source: Path | None, java_source: Path | None, include_api: bool, *, include_private: bool = True, include_client: bool | None = None, native_source: Path | None = None, startup_template: Path | None = None) -> dict:
+    def stage(self, python_source: Path | None, java_source: Path | None, include_api: bool, *, include_private: bool = True, include_client: bool | None = None, native_source: Path | None = None, startup_template: Path | None = None, defer_startup_template: bool = False) -> dict:
         if include_client is None:include_client=include_private
         if include_client and not include_private:
             raise ValueError('--public 不能包含客户端。')
         if startup_template is not None and not include_private:raise ValueError('Startup terrain requires the complete local bundle')
+        if defer_startup_template and startup_template is None:raise ValueError('Deferred startup terrain requires a template')
         if self.destination.exists():
             raise FileExistsError('输出目录已存在；请使用新版本号。不会覆盖或删除现有目录。')
         self.destination.mkdir(parents=True)
@@ -427,7 +428,7 @@ class Builder:
             profile_summary.update(prebuild_profile_resources(self))
             if startup_template is not None:
                 from modpack.startup_template import stage as stage_startup_template
-                profile_summary.update(stage_startup_template(self,startup_template))
+                profile_summary.update(stage_startup_template(self,startup_template,expand=not defer_startup_template))
         client_summary=None
         if include_client:
             from modpack.game_client import stage as stage_client
@@ -492,13 +493,18 @@ def verify_manifest(root: Path) -> dict:
     allow_minecraft=allow_private and manifest.get('includesMinecraft') is True and marker.get('includesMinecraft') is True
     installation_rows={}
     startup_rows={}
-    if allow_profile and (manifest.get('profileSummary') or {}).get('startupTemplate'):
+    profile_summary=manifest.get('profileSummary') or {}
+    if allow_profile and profile_summary.get('startupTemplate'):
         from modpack.startup_template import checked,METADATA,PAYLOAD,WORLD
         metadata=json.loads((root/METADATA).read_text(encoding='utf-8'))
-        for entry in checked(metadata,root/PAYLOAD):
-            name=entry['path']
-            relative=(PROFILE_DIRECTORY+'/saves/'+WORLD+'/'+name[len('world/'):]) if name.startswith('world/') else PROFILE_DIRECTORY+'/'+name[len('cache/'):]
-            startup_rows[relative]=entry
+        rows=checked(metadata,root/PAYLOAD)
+        if metadata.get('mods')!={row['file']:row['sha256'] for row in profile_summary['mods']}:
+            raise ValueError('启动模板与整合包模组 SHA256 不一致。')
+        if profile_summary.get('startupTemplateExpanded',True):
+            for entry in rows:
+                name=entry['path']
+                relative=(PROFILE_DIRECTORY+'/saves/'+WORLD+'/'+name[len('world/'):]) if name.startswith('world/') else PROFILE_DIRECTORY+'/'+name[len('cache/'):]
+                startup_rows[relative]=entry
     if allow_minecraft:
         lock=json.loads((root/'config/installation-sha256.json').read_text(encoding='utf-8'))
         if lock.get('minecraft')!='1.21.1' or lock.get('fabricLoader')!='0.19.5':raise ValueError('整合包 MC/Fabric 安装清单版本不匹配。')
@@ -605,6 +611,7 @@ def main() -> int:
     parser.add_argument('--output', help='New workspace-relative destination; existing output is never overwritten')
     parser.add_argument('--native-build-dir', type=Path, help='Completed rebuilt DLL directory; only the six versions referenced by bundled Python are used')
     parser.add_argument('--startup-template', type=Path, help='Explicit new player-free world/Fabric inputs generated under data/; never a developer profile')
+    parser.add_argument('--defer-startup-template', action='store_true', help='Keep the pinned template archived until first launch')
     parser.add_argument('--python-runtime', type=Path, help='Existing clean Python 3.13 + Tk root; never a venv')
     parser.add_argument('--java-runtime', type=Path, help='Existing OpenJDK 21 root, with legal/')
     parser.add_argument('--include-fabric-api', action='store_true')
@@ -623,7 +630,8 @@ def main() -> int:
     destination = local_path(ROOT, args.output or 'dist/OWMC-' + args.version)
     try:
         manifest = Builder(ROOT, destination, args.version).stage(args.python_runtime, args.java_runtime, args.include_fabric_api,include_private=args.include_private,
-                    include_client=args.include_private and not args.without_client,native_source=args.native_build_dir,startup_template=args.startup_template)
+                    include_client=args.include_private and not args.without_client,native_source=args.native_build_dir,startup_template=args.startup_template,
+                    defer_startup_template=args.defer_startup_template)
     except Exception:
         # Leave partial output intact for diagnosis; the entry requires a
         # completed manifest before opening a packaged launcher.

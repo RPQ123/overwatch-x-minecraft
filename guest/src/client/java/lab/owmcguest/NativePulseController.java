@@ -38,6 +38,7 @@ final class NativePulseController implements AutoCloseable {
         publish(gate.bound(scope),scope,cast.tick(),volley.tick());if(!admitted)return;
         var forward=c.player.getRotationVec(1);var at=c.player.getEyePos().add(forward.multiply(.35));
         var d=new NativePulseRuntime.Deployment(c.player.getUuid(),world,h.generation(),model,volley.tick(),now,at,forward.multiply(15));
+        NativeMuzzleOrigins.thrown(c,h,"pulse:"+h.generation()+":"+model+":"+volley.tick(),NativePulseRuntime.HERO,at,true);
         queued++;publish(true,scope,cast.tick(),volley.tick());var server=c.getServer();server.execute(()->NativePulseRuntime.deploy(server,d));
     }
     private void publish(boolean ready,NativePulseGate.Scope scope,long cast,long deploy){

@@ -19,7 +19,8 @@ import net.minecraft.world.RaycastContext;
  * （假设，见 NATIVE-MEI-BLIZZARD.md）。半径 10 格、每秒 20 点伤害为 MC 适配值。 */
 public final class NativeBlizzardRuntime {
     public record Scope(UUID owner,long world,long source,long model){}
-    public record View(UUID owner,long world,Vec3d at,boolean landed,int age,long wall){}
+    public record View(UUID owner,long world,Vec3d at,boolean landed,int age,long wall,String visualId){public View(UUID owner,long world,Vec3d at,boolean landed,int age,long wall){this(owner,world,at,landed,age,wall,"");}}
+    private static String visualId="";
     static final double SPEED=20/20.0,GRAVITY=9.8/400.0,RADIUS=10,NATIVE_DPS=20;
     static final int FLIGHT_TICKS=400,ACTIVE_TICKS=160;
     private static Scope scope;private static Vec3d pos,vel;private static boolean landed;private static int age,activeAge;private static long cast;
@@ -32,7 +33,11 @@ public final class NativeBlizzardRuntime {
         return p!=null&&p.isAlive()&&NativeWorldIdentity.of(server,p.getWorld().getRegistryKey())==scope.world()?p:null;
     }
     public static void cast(MinecraftServer server,Scope next){
+        cast(server,next,"");
+    }
+    public static void cast(MinecraftServer server,Scope next,String visualLaunch){
         scope=next;var p=owner(server);if(p==null){scope=null;return;}
+        visualId=visualLaunch;
         pos=p.getEyePos().add(p.getRotationVec(1).multiply(.6));vel=p.getRotationVec(1).multiply(SPEED);landed=false;age=0;activeAge=0;cast++;casts++;publish();
     }
     public static void tick(MinecraftServer server){
@@ -58,7 +63,7 @@ public final class NativeBlizzardRuntime {
         publish();
     }
     private static void publish(){
-        view=scope==null||pos==null?null:new View(scope.owner(),scope.world(),pos,landed,landed?activeAge:age,System.currentTimeMillis());
+        view=scope==null||pos==null?null:new View(scope.owner(),scope.world(),pos,landed,landed?activeAge:age,System.currentTimeMillis(),visualId);
         var o=new JsonObject();o.addProperty("active",scope!=null);o.addProperty("landed",landed&&scope!=null);o.addProperty("casts",casts);o.addProperty("lands",lands);
         o.addProperty("contacts",contacts);o.addProperty("damageTicks",damageTicks);o.addProperty("damageApplied",damageApplied);o.addProperty("radius",RADIUS);
         if(scope!=null&&pos!=null){o.addProperty("x",pos.x);o.addProperty("y",pos.y);o.addProperty("z",pos.z);o.addProperty("activeAge",activeAge);}
@@ -67,8 +72,8 @@ public final class NativeBlizzardRuntime {
 if(scope!=null&&pos!=null&&landed&&modelsWall>0){
             var f=OriginalEffectFrames.frame(scope.owner(),scope.world(),scope.source(),scope.model(),modelsWall);
             // MC presentation sampling inside the real active area, not native emitter curves.
-            for(int i=0;i<12;i++){double a=i*Math.PI/6+activeAge*.035;
-                OriginalEffectFrames.body(f,"mei-blizzard-shard",pos.add(Math.cos(a)*RADIUS*.55,1+(i%3)*.35,Math.sin(a)*RADIUS*.55),new Vec3d(4,4,4),.7f,false);}
+            for(int i=0;i<18;i++){double a=i*Math.PI/9+activeAge*.035;
+                OriginalEffectFrames.body(f,"mei-blizzard-shard",pos.add(Math.cos(a)*RADIUS*.75,1.3+(i%3)*.55,Math.sin(a)*RADIUS*.75),new Vec3d(6.4,6.4,6.4),.8f,false);}
             o.add("models",f);
         }
         status=o.toString();

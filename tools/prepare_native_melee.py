@@ -11,7 +11,7 @@ def prepare(process,pid):
     admin=r.pointer(process.base+0x17b7f90);table=process.read(r.pointer(admin+16),65536)
     controller=r.entity(table,s['localId']);model=r.entity(table,s['modelId']);reference=r.component(controller,0x20);info=r.component(controller,0x3f)
     hero=r.unpack('<Q',info+0x98)[0]
-    if hero&0xffff not in (2,3,5,6,8,9,10,0x15,0x29,0x42,0x65,0x6e,0xdd):raise ValueError('No calibrated quick melee profile')
+    if hero&0xffff not in (2,3,5,6,8,9,10,0x15,0x29,0x40,0x42,0x65,0x6e,0xdd):raise ValueError('No calibrated quick melee profile')
     matches=[k for k in r.graph_cache if k[2]==0x0580000000000043]
     if len(matches)!=1:raise ValueError('Original shared melee graph unavailable')
     script,graph,resource=matches[0];nodes=r.stu_list(graph+0x50);bag=r.pointer(script+0x98)

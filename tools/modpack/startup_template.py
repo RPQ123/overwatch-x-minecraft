@@ -57,7 +57,7 @@ def checked(metadata, archive):
     return rows
 
 
-def stage(builder, directory):
+def stage(builder, directory, *, expand=True):
     directory=Path(directory).resolve()
     # This is an explicit generated build input, never a developer save path.
     if not directory.is_relative_to((builder.root/'data').resolve()):
@@ -71,6 +71,9 @@ def stage(builder, directory):
                       'New project-generated seed 20261014 terrain; reproducible Fabric products from exactly bundled mods; no developer saves or player data')
     builder.copy(archive,PAYLOAD,'startup-template',directory)
     builder.copy(directory/'template.json',METADATA,'startup-template',directory)
+    if not expand:
+        return dict(worldCreated=False,worldCreation='first-launch-clean-startup-template',
+                    startupTemplate=True,startupTemplateExpanded=False,templateFiles=len(rows),playerDataCopied=False)
     with zipfile.ZipFile(archive) as z:
         for row in rows:
             name=row['path']

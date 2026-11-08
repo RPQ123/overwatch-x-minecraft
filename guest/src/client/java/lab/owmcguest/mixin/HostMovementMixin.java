@@ -19,7 +19,7 @@ abstract class HostMovementMixin extends Input {
         var pose=HostPoseReader.INSTANCE.latest();
         int bits=pose!=null&&pose.inputActive()?pose.movementBits():0;
         bits=lab.owmcguest.HanzoControlController.movementBits(net.minecraft.client.MinecraftClient.getInstance(),pose,bits);
-        if(NativeDeadeyeController.movementLocked())bits&=~0x7f;
+        if(NativeDeadeyeController.movementLocked()||lab.owmcguest.RoadhogClient.breatherLocked())bits&=~0x7f;
         pressingForward=(bits&1)!=0;pressingBack=(bits&2)!=0;
         pressingLeft=(bits&4)!=0;pressingRight=(bits&8)!=0;
         jumping=(bits&16)!=0&&!NativeDeadeyeController.jumpLocked()&&!NativeMotorController.INSTANCE.jumpLocked();sneaking=(bits&32)!=0;

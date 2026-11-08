@@ -17,6 +17,7 @@ public final class HeroVoiceEvents implements AutoCloseable {
     private record Event(HeroVoiceRuntime.Binding binding,String event,long token,long ns,String signal,String variant) {}
     private final HeroVoiceAssets assets=new HeroVoiceAssets();
     private final HeroVoiceEffects effects=new HeroVoiceEffects(); // 语音挂接：位置音效不占人声。
+    private List<HeroVoiceAssets.Clip> effectClips=List.of();
     private final HeroVoiceSignals signals=new HeroVoiceSignals(this);
     private final HeroVoiceKillGate killGate=new HeroVoiceKillGate(); // 语音挂接：单杀概率与连杀保底。
     private final ArrayBlockingQueue<Event> queue=new ArrayBlockingQueue<>(64);
@@ -76,8 +77,8 @@ public final class HeroVoiceEvents implements AutoCloseable {
         if(binding!=null&&System.currentTimeMillis()-binding.wall()>200){queue.clear();signals.rebaseline();seen.clear();} // 语音挂接：身份不变时保留MC待建墙确认。
         var next=enabled?current(client):null;
         HeroVoiceMovementSounds.bind(next); // 语音挂接：只匹配当前原版英雄对应的MC本玩家。
-        // 语音挂接：退出补充SFX（包括龙吼），保留原版自身的技能音效。
-        effects.tick(client,next,List.of());
+        // W3: only four explicitly approved Winston SFX, with native ownership dedupe.
+        effects.tick(client,next,effectClips);
         if(next==null){
             if(binding!=null){queue.clear();signals.reset();killGate.reset();seen.clear();lastPlayed.clear();HeroVoiceChannel.reset(client);}
             binding=null;HeroVoiceRuntime.unbind();publish(client);return;
@@ -148,7 +149,8 @@ public final class HeroVoiceEvents implements AutoCloseable {
     }
     private void installPack(HeroVoiceAssets.Loaded loaded){
         bank.clear();lastVariant.clear();
-        for(var clip:loaded.clips())bank.computeIfAbsent(new Key(clip.hero(),clip.event()),key->new ArrayList<>()).add(clip);
+        effectClips=loaded.clips().stream().filter(c->WinstonAudioCatalog.allowed(c.hero(),c.event(),c.hash())).toList();
+        for(var clip:loaded.clips())if(!WinstonAudioCatalog.allowed(clip.hero(),clip.event(),clip.hash()))bank.computeIfAbsent(new Key(clip.hero(),clip.event()),key->new ArrayList<>()).add(clip);
         loadedClips=loaded.clips().size();packReady=true;
     }
     private void drain(MinecraftClient client){

@@ -17,7 +17,7 @@ TRACER_SHA='6d783f0e384bd1a7ebc88f35e8ce7f597f599c21d9f4d165056058d3f689e6a3'
 
 ROSTER=(('genji',0x29,'0225'),('mccree',0x42,'02a3'),('pharah',8,'0032'),('reaper',2,'0022'),
         ('soldier76',0x6e,'03cf'),('tracer',3,'0001'),('bastion',0x15,'01fd'),('hanzo',5,'0141'),
-        ('junkrat',0x65,'0380'),('mei',0xdd,'08ba'),('torbjorn',6,'01a3'),('widowmaker',10,'001c'))
+        ('junkrat',0x65,'0380'),('mei',0xdd,'08ba'),('torbjorn',6,'01a3'),('widowmaker',10,'001c'),('roadhog',0x40,'028f'),('winston',9,'01c0'))
 
 
 def parse_body(raw):

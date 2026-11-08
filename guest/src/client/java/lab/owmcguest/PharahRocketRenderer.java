@@ -21,8 +21,6 @@ final class PharahRocketRenderer {
     private static float[] positions,normals,uv;private static int[] indices;
     private static boolean attempted;private static NativeShotProtocol.Source source;private static final Set<Long> seen=new HashSet<>();
     private static final Set<Long> flashed=new HashSet<>();
-    private record LaunchFrame(PharahRocketPresentation.Basis basis,double fov,double aspect){}
-    private static final Map<Long,LaunchFrame> launches=new HashMap<>();
     private static long launchWorld,launchModel;
     static void register(){WorldRenderEvents.AFTER_ENTITIES.register(PharahRocketRenderer::render);}
     private static void load(MinecraftClient client)throws Exception{
@@ -63,7 +61,7 @@ final class PharahRocketRenderer {
         var view=NativeCombatRuntime.rocketView;var host=HostPoseReader.INSTANCE.latest();
         if(!NativeCombatRuntime.rocketVisualsReady||client.world==null||client.player==null||client.getServer()==null||view==null||host==null||!host.inputActive()||host.flags()!=1||!client.player.isAlive()||view.source().pid()!=host.pid()||view.source().hostGeneration()!=host.generation()||!client.player.getUuid().equals(view.player())||NativeLocomotionController.INSTANCE.hero()!=0x02e0000000000008L||view.world()!=NativeWorldIdentity.of(client.getServer(),client.world.getRegistryKey()))return;
         long model=NativeLocomotionController.INSTANCE.modelId();if(view.model()!=model)return;
-        if(!view.source().equals(source)||launchWorld!=view.world()||launchModel!=model){source=view.source();launchWorld=view.world();launchModel=model;seen.clear();flashed.clear();launches.clear();}
+        if(!view.source().equals(source)||launchWorld!=view.world()||launchModel!=model){source=view.source();launchWorld=view.world();launchModel=model;seen.clear();flashed.clear();}
         var matrices=ctx.matrixStack();if(matrices==null)return;
         // OW effect sprites use additive light. Ordinary alpha blending made
         // the bright narrow star look like a muddy orange dot over terrain.
@@ -71,13 +69,9 @@ final class PharahRocketRenderer {
         var camera=ctx.camera().getPos();long now=System.currentTimeMillis();boolean drew=false;
         // A real admitted native shot owns the flash, even if its flight hit a
         // nearby wall in the same server tick. Never infer a shot from LMB.
-        var rotation=ctx.camera().getRotation();var f=new org.joml.Vector3f(0,0,-1).rotate(rotation);var rr=new org.joml.Vector3f(1,0,0).rotate(rotation);var uu=new org.joml.Vector3f(0,1,0).rotate(rotation);
-        var forward=new Vec3d(f.x,f.y,f.z);var right=new Vec3d(rr.x,rr.y,rr.z);var up=new Vec3d(uu.x,uu.y,uu.z);
-        double aspect=(double)client.getWindow().getFramebufferWidth()/client.getWindow().getFramebufferHeight();
-        var launch=PharahRocketPresentation.launch(0,host.fov(),aspect);
-        var muzzle=camera.add(forward.multiply(launch.forward())).add(right.multiply(launch.right())).add(up.multiply(launch.up()));
         boolean flashDrew=false;
         for(var shot:view.flashes()){
+            var muzzle=NativeMuzzleOrigins.at(shot.identity(),new Vec3d(shot.start().x(),shot.start().y(),shot.start().z()));
             double age=(now-shot.wallMs())/1000.0;if(age<0||age>.13)continue;
             int alpha=(int)(230*Math.pow(1-age/.13,.65));
             billboard(matrices,buffers.getBuffer(glowLayer),ctx,muzzle,.12f,255,125,24,alpha/2);
@@ -97,16 +91,7 @@ final class PharahRocketRenderer {
             var direction=velocity.normalize();
             // Freeze the camera plane/FOV for this launch. Looking around after
             // firing must not move a rocket's early convergence sideways.
-            var frame=launches.get(shot.id());
-            if(frame==null&&age<.16){
-                try{frame=new LaunchFrame(PharahRocketPresentation.basis(shot.velocity(),new NativeShotProtocol.Vec(right.x,right.y,right.z)),host.fov(),aspect);launches.put(shot.id(),frame);}
-                catch(IllegalArgumentException invalid){continue;}
-            }
-            var offset=PharahRocketPresentation.launch(age,frame==null?host.fov():frame.fov(),frame==null?aspect:frame.aspect());
-            var basis=frame==null?null:frame.basis();
-            var side=basis==null?Vec3d.ZERO:new Vec3d(basis.right().x(),basis.right().y(),basis.right().z());
-            var lift=basis==null?Vec3d.ZERO:new Vec3d(basis.up().x(),basis.up().y(),basis.up().z());
-            if(!shot.barrage())at=at.add(direction.multiply(offset.forward())).add(side.multiply(offset.right())).add(lift.multiply(offset.up()));
+            at=NativeMuzzleOrigins.at(shot.identity(),at);
             if(!client.world.isChunkLoaded(BlockPos.ofFloored(at)))continue;
             if(!shot.barrage()){
                 var hit=client.world.raycast(new RaycastContext(start,at,RaycastContext.ShapeType.COLLIDER,RaycastContext.FluidHandling.NONE,client.player));
@@ -149,7 +134,6 @@ final class PharahRocketRenderer {
             effectVertex(v,m,-radius,-radius,0,frame/4f,1,255,185,80,(int)(240*fade));effectVertex(v,m,radius,-radius,0,(frame+1)/4f,1,255,185,80,(int)(240*fade));effectVertex(v,m,radius,radius,0,(frame+1)/4f,0,255,185,80,(int)(240*fade));effectVertex(v,m,-radius,radius,0,frame/4f,0,255,185,80,(int)(240*fade));matrices.pop();
             if(age<.075)billboard(matrices,buffers.getBuffer(flareLayer),ctx,at,.30f,255,242,175,(int)(250*(1-age/.075)));drew=true;
         }
-        launches.keySet().removeIf(id->view.shots().stream().noneMatch(s->s.id()==id));
         if(drew){buffers.draw(bodyLayer);buffers.draw(tailLayer);buffers.draw(flameLayer);buffers.draw(glowLayer);buffers.draw(flareLayer);NativeCombatRuntime.rocketRenderFrames++;}
         if(flashDrew)NativeCombatRuntime.muzzleRenderFrames++;
     }

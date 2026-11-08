@@ -30,6 +30,7 @@ public final class HanzoScatterContextCheck {
             check(p.velocity().z()==-(25+65*q),"actual original factory velocity, no camera retarget");
         }
         var p=HanzoScatterContext.resolve(report(1),EXPECTED,numbers(1),NOW);check(p.parentDamage()==500&&p.childDamage()==300,"unbound evaluatedDamage=0 is ignored; adaptation applied once");
+        var nextOwner=report(1);nextOwner.addProperty("probeVersion",17);check(HanzoScatterContext.resolve(nextOwner,EXPECTED,numbers(1),NOW).nativeValues(),"Shared emission17 preserves calibrated Scatter");
         rejected(report(1),EXPECTED,null,NOW,"missing typed numbers");
         rejected(report(1),EXPECTED,new HanzoScatterContext.Numbers(.5,125,45,NOW),NOW,"q/factory mismatch; no q derivation from speed");
         rejected(report(.5),EXPECTED,new HanzoScatterContext.Numbers(.5,75,75,NOW),NOW,"stale contextual980");

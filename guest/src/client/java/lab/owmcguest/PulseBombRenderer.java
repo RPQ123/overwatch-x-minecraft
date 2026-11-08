@@ -74,6 +74,7 @@ final class PulseBombRenderer {
     private static void render(WorldRenderContext ctx){
         var client=MinecraftClient.getInstance();
         if(!Boolean.getBoolean("owmc.frameExport"))return;
+        PulseBurstRenderer.render(ctx);
         if(!attempted){attempted=true;try{load(client);}catch(Exception failure){error=failure.toString();System.err.println("OWMC original Pulse model unavailable: "+error);}}
         var host=HostPoseReader.INSTANCE.latest();var view=NativePulseRuntime.view;long now=System.currentTimeMillis();
         if(!ready||view==null||host==null||client.player==null||client.world==null||client.getServer()==null||ctx.matrixStack()==null
@@ -84,10 +85,12 @@ final class PulseBombRenderer {
             ||now<view.launchedWall()||now-view.launchedWall()>6500)return;
         var normal=view.normal();if(normal==null||!Double.isFinite(normal.lengthSquared())||normal.lengthSquared()<.0001)return;
         normal=normal.normalize();
-        var at=view.at().add(normal.multiply(PulseBombPresentation.contactOffset(halfThickness,view.attached(),view.blockAttached())));
+        var at=view.at().add(normal.multiply(PulseBombPresentation.contactOffset(halfThickness*T3VisualTuning.PULSE_SCALE,view.attached(),view.blockAttached())));
+        if(!view.attached())at=NativeMuzzleOrigins.at("pulse:"+view.source()+":"+view.model()+":"+view.nativeTick(),at);
         if(!Double.isFinite(at.x)||!Double.isFinite(at.y)||!Double.isFinite(at.z)||!client.world.isChunkLoaded(BlockPos.ofFloored(at)))return;
         var matrices=ctx.matrixStack();var camera=ctx.camera().getPos();matrices.push();
         matrices.translate(at.x-camera.x,at.y-camera.y,at.z-camera.z);
+        matrices.scale(T3VisualTuning.PULSE_SCALE,T3VisualTuning.PULSE_SCALE,T3VisualTuning.PULSE_SCALE);
         // The original white/LED face is +Y. Only visuals move outward; runtime
         // attachment, fuse, damage and contact coordinates are unchanged.
         matrices.multiply(new Quaternionf().rotationTo(0,1,0,(float)normal.x,(float)normal.y,(float)normal.z));

@@ -121,7 +121,7 @@ class HeroBindingRefresh:
             # original shots during equip (observed76 factories42..45 while
             # combatReady=false). The native consumer still validates exact
             # current model/creation/typed definitions; MC scope stays guarded.
-            early_armory=identity[1] in (0x02e0000000000002,0x02e0000000000003,0x02e000000000006e)
+            early_armory=identity[1] in (0x02e0000000000002,0x02e0000000000003,0x02e000000000006e,0x02e0000000000040)
             if early_armory:prepare_armory(process,pid)
             # Publish E before the new locomotion identity is visible to MC.
             # Otherwise an immediate post-switch E can outrun its owner binding.
@@ -151,7 +151,7 @@ class HeroBindingRefresh:
                 prepare_roll(process,pid);apply_mccree_profile(process,pid)
             if record['hero']==0x02e0000000000003:prepare_blink(process,pid)
             if record['hero'] in (0x02e0000000000042,0x02e0000000000015,0x02e0000000000029,0x02e0000000000008,0x02e000000000006e,0x02e000000000000a,0x02e0000000000006):prepare_skills(process,pid)
-            if record['hero']&0xffff in (2,3,5,6,8,9,10,0x15,0x29,0x42,0x65,0x6e,0xdd):prepare_melee(process,pid)
+            if record['hero']&0xffff in (2,3,5,6,8,9,10,0x15,0x29,0x40,0x42,0x65,0x6e,0xdd):prepare_melee(process,pid)
             if record['hero']==0x02e0000000000008:apply_hover_response(process,pid)
             if record['hero'] in (0x02e0000000000015,0x02e00000000000dd):prepare_sustain(process,pid)
             # Each beta hero owns the same typed charge/cost primitive IDs, but
@@ -161,7 +161,7 @@ class HeroBindingRefresh:
             # local graph exposes both primitives.
             if record['hero'] in HERO_IDS and record['hero']!=0x02e0000000000029:
                 prepare_meter(process,pid)
-            if not early_armory and record['hero'] in (0x02e0000000000042,0x02e0000000000002,0x02e0000000000003,0x02e000000000006e,0x02e0000000000015,0x02e0000000000006,0x02e000000000000a,0x02e0000000000008,0x02e0000000000005,0x02e00000000000dd):
+            if not early_armory and record['hero'] in (0x02e0000000000042,0x02e0000000000002,0x02e0000000000003,0x02e000000000006e,0x02e0000000000015,0x02e0000000000006,0x02e000000000000a,0x02e0000000000008,0x02e0000000000005,0x02e00000000000dd,0x02e0000000000040):
                 try:prepare_armory(process,pid)
                 except UnsupportedArmory as unavailable:
                     # Pharah's independently validated primary was bound above.

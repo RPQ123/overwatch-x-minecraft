@@ -19,7 +19,7 @@ struct ArmorySpec {
 };
 static_assert(sizeof(ArmoryHeader)==96&&sizeof(ArmorySpec)==144);
 inline bool assaultDefenseHero(uint64_t hero){
-    constexpr std::array<uint64_t,12> suffixes{0x29,0x42,8,2,0x6e,3,0x15,5,0x65,0xdd,6,10};
+    constexpr std::array<uint64_t,13> suffixes{0x29,0x42,8,2,0x6e,3,0x15,5,0x65,0xdd,6,10,0x40};
     for(auto suffix:suffixes)if(hero==(0x02e0000000000000ULL|suffix))return true;
     return false;
 }

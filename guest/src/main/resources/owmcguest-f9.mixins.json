@@ -3,6 +3,6 @@
   "package": "lab.owmcguest.mixin",
   "compatibilityLevel": "JAVA_21",
   "refmap": "owmc-guest-refmap.json",
-  "mixins": ["F9SummonSpawnMixin"],
+  "mixins": ["F9SummonSpawnMixin", "RoadhogDamageMixin"],
   "injectors": {"defaultRequire": 1}
 }

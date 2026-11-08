@@ -7,7 +7,7 @@ try {
     $selectedVersion=[regex]::Match((Get-Content tools/native_compositor_version.py -Raw),'(?m)^VERSION=(\d+)\s*$')
     if (!$selectedVersion.Success) {throw 'No selected compositor version.'}
     $liveVersion=if ($CameraKeyCandidate) {33} elseif ($NativeForegroundCandidate) {32} else {[int]$selectedVersion.Groups[1].Value}
-    if ($liveVersion -notin @(31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46)) {throw 'Unsupported compositor build version.'}
+    if ($liveVersion -notin @(31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48)) {throw 'Unsupported compositor build version.'}
     $liveOutput=Join-Path (Get-Location) "native-host/build/owmc-live-passthrough-v$liveVersion.dll"
     $liveExe=Join-Path (Get-Location) 'overwatch-2015/Overwatch Beta 0.8.0.24919/GameClientApp.patched.exe'
     foreach ($liveProcess in (Get-Process -Name 'GameClientApp.patched' -ErrorAction SilentlyContinue)) {

@@ -10,6 +10,7 @@ final class HeroVoiceUltimateSignals implements AutoCloseable {
         NativeSkillReader.register("heroVoiceBastionBegin",new NativeSkillReader.Spec(0x02e0000000000015L,0x058000000000012fL,Map.of("transform",123,"tank",105)));
         NativeSkillReader.register("junkTire",new NativeSkillReader.Spec(0x02e0000000000065L,0x0580000000000232L,Map.of("create",32,"control",10,"view",11,"windup",7)));
         NativeSkillReader.register("roadhogWeapon",new NativeSkillReader.Spec(0x02e0000000000040L,0x05800000000001c6L,Map.of("primary",30,"secondary",34,"wholeHog",37)));
+        NativeSkillReader.register("winstonPrimal",new NativeSkillReader.Spec(WinstonRules.HERO,0x0580000000000109L,Map.of("rage",10,"pool",7)));
         NativeSkillReader.register("zaryaGraviton",new NativeSkillReader.Spec(0x02e0000000000068L,0x058000000000025fL,Map.of("volley",2)));
         NativeSkillReader.register("heroVoiceLucioBegin",new NativeSkillReader.Spec(0x02e0000000000079L,0x058000000000073aL,Map.of("castBegin",9,"barrier",0)));
         NativeSkillReader.register("zenTranscendence",new NativeSkillReader.Spec(0x02e0000000000020L,0x058000000000017bL,Map.of("windup",19,"heal",17,"aura",30)));
@@ -29,6 +30,7 @@ final class HeroVoiceUltimateSignals implements AutoCloseable {
         case "mei"->new Profile("blizzard","windup","native:mei-064a:1-begin",false);
         case "junkrat"->new Profile("junkTire","windup","native:junkrat-0232:7-begin",false);
         case "roadhog"->new Profile("roadhogWeapon","wholeHog","native:roadhog-01c6:37-begin",false);
+        case "winston"->new Profile("winstonPrimal","rage","native:winston-0109:10-primal-begin",false);
         case "zarya"->new Profile("zaryaGraviton","volley","native:zarya-025f:2-tick",true);
         case "lucio"->new Profile("heroVoiceLucioBegin","castBegin","native:lucio-073a:9-begin",false);
         case "zenyatta"->new Profile("zenTranscendence","windup","native:zenyatta-017b:19-begin",false);
