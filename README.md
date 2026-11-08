@@ -138,10 +138,10 @@
 
 **14 位英雄 · 89 项技能与机制 · ✅ 86 项已还原 · 🚧 1 项部分还原 · ❌ 2 项未还原**
 
-麦克雷、小美、托比昂、黑百合、路霸、温斯顿的全部技能均已实机确认。点击英雄名可收起。[图标来源](docs/media/README.md#图标规格)。
+麦克雷、小美、托比昂、黑百合、路霸、温斯顿的全部技能均已实机确认。点击英雄名展开技能表。[图标来源](docs/media/README.md#图标规格)。
 
-<details open>
-<summary><img src="docs/media/heroes/genji/portrait.png" width="24" height="24" alt="源氏"> <strong>源氏</strong> · 8/8 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/genji/portrait.png" width="40" height="40" align="absmiddle" alt="源氏">&nbsp; 源氏 &nbsp;<code>✅ 8/8 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -156,8 +156,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/mccree/portrait.png" width="24" height="24" alt="麦克雷"> <strong>麦克雷</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/mccree/portrait.png" width="40" height="40" align="absmiddle" alt="麦克雷">&nbsp; 麦克雷 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -170,8 +170,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/pharah/portrait.png" width="24" height="24" alt="法老之鹰"> <strong>法老之鹰</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/pharah/portrait.png" width="40" height="40" align="absmiddle" alt="法老之鹰">&nbsp; 法老之鹰 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -184,8 +184,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/reaper/portrait.png" width="24" height="24" alt="死神"> <strong>死神</strong> · 5/6 已还原 · 1 项未还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/reaper/portrait.png" width="40" height="40" align="absmiddle" alt="死神">&nbsp; 死神 &nbsp;<code>🚧 5/6 已还原</code> <sub>1 项未还原</sub></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -198,8 +198,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/soldier76/portrait.png" width="24" height="24" alt="士兵：76"> <strong>士兵：76</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/soldier76/portrait.png" width="40" height="40" align="absmiddle" alt="士兵：76">&nbsp; 士兵：76 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -212,8 +212,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/tracer/portrait.png" width="24" height="24" alt="猎空"> <strong>猎空</strong> · 5/5 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/tracer/portrait.png" width="40" height="40" align="absmiddle" alt="猎空">&nbsp; 猎空 &nbsp;<code>✅ 5/5 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -225,8 +225,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/bastion/portrait.png" width="24" height="24" alt="堡垒"> <strong>堡垒</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/bastion/portrait.png" width="40" height="40" align="absmiddle" alt="堡垒">&nbsp; 堡垒 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -239,8 +239,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/hanzo/portrait.png" width="24" height="24" alt="半藏"> <strong>半藏</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/hanzo/portrait.png" width="40" height="40" align="absmiddle" alt="半藏">&nbsp; 半藏 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -253,8 +253,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/junkrat/portrait.png" width="24" height="24" alt="狂鼠"> <strong>狂鼠</strong> · 5/7 已还原 · 1 项部分还原 · 1 项未还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/junkrat/portrait.png" width="40" height="40" align="absmiddle" alt="狂鼠">&nbsp; 狂鼠 &nbsp;<code>🚧 5/7 已还原</code> <sub>1 项部分还原，1 项未还原</sub></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -268,8 +268,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/mei/portrait.png" width="24" height="24" alt="小美"> <strong>小美</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/mei/portrait.png" width="40" height="40" align="absmiddle" alt="小美">&nbsp; 小美 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -282,8 +282,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/torbjorn/portrait.png" width="24" height="24" alt="托比昂"> <strong>托比昂</strong> · 10/10 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/torbjorn/portrait.png" width="40" height="40" align="absmiddle" alt="托比昂">&nbsp; 托比昂 &nbsp;<code>✅ 10/10 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -300,8 +300,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/widowmaker/portrait.png" width="24" height="24" alt="黑百合"> <strong>黑百合</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/widowmaker/portrait.png" width="40" height="40" align="absmiddle" alt="黑百合">&nbsp; 黑百合 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -314,8 +314,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/roadhog/portrait.png" width="24" height="24" alt="路霸"> <strong>路霸</strong> · 6/6 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/roadhog/portrait.png" width="40" height="40" align="absmiddle" alt="路霸">&nbsp; 路霸 &nbsp;<code>✅ 6/6 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |
@@ -328,8 +328,8 @@
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/winston/portrait.png" width="24" height="24" alt="温斯顿"> <strong>温斯顿</strong> · 5/5 已还原</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/winston/portrait.png" width="40" height="40" align="absmiddle" alt="温斯顿">&nbsp; 温斯顿 &nbsp;<code>✅ 5/5 全部还原</code></h3></summary>
 
 | 图标 | 技能 | 按键 | 状态 |
 | :---: | --- | --- | --- |

@@ -138,10 +138,10 @@ Use the number row or numeric keypad in menus. Follow the on-screen prompts to c
 
 **14 heroes · 89 abilities and mechanics · ✅ 86 restored · 🚧 1 partial · ❌ 2 not restored**
 
-The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have been confirmed in game. Click a hero name to collapse it. [Icon sources](docs/media/README.md#图标规格).
+The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have been confirmed in game. Click a hero name to see the full kit. [Icon sources](docs/media/README.md#图标规格).
 
-<details open>
-<summary><img src="docs/media/heroes/genji/portrait.png" width="24" height="24" alt="Genji"> <strong>Genji</strong> · 8/8 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/genji/portrait.png" width="40" height="40" align="absmiddle" alt="Genji">&nbsp; Genji &nbsp;<code>✅ 8/8 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -156,8 +156,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/mccree/portrait.png" width="24" height="24" alt="McCree"> <strong>McCree</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/mccree/portrait.png" width="40" height="40" align="absmiddle" alt="McCree">&nbsp; McCree &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -170,8 +170,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/pharah/portrait.png" width="24" height="24" alt="Pharah"> <strong>Pharah</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/pharah/portrait.png" width="40" height="40" align="absmiddle" alt="Pharah">&nbsp; Pharah &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -184,8 +184,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/reaper/portrait.png" width="24" height="24" alt="Reaper"> <strong>Reaper</strong> · 5/6 restored · 1 not restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/reaper/portrait.png" width="40" height="40" align="absmiddle" alt="Reaper">&nbsp; Reaper &nbsp;<code>🚧 5/6 restored</code> <sub>1 not restored</sub></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -198,8 +198,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/soldier76/portrait.png" width="24" height="24" alt="Soldier: 76"> <strong>Soldier: 76</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/soldier76/portrait.png" width="40" height="40" align="absmiddle" alt="Soldier: 76">&nbsp; Soldier: 76 &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -212,8 +212,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/tracer/portrait.png" width="24" height="24" alt="Tracer"> <strong>Tracer</strong> · 5/5 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/tracer/portrait.png" width="40" height="40" align="absmiddle" alt="Tracer">&nbsp; Tracer &nbsp;<code>✅ 5/5 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -225,8 +225,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/bastion/portrait.png" width="24" height="24" alt="Bastion"> <strong>Bastion</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/bastion/portrait.png" width="40" height="40" align="absmiddle" alt="Bastion">&nbsp; Bastion &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -239,8 +239,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/hanzo/portrait.png" width="24" height="24" alt="Hanzo"> <strong>Hanzo</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/hanzo/portrait.png" width="40" height="40" align="absmiddle" alt="Hanzo">&nbsp; Hanzo &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -253,8 +253,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/junkrat/portrait.png" width="24" height="24" alt="Junkrat"> <strong>Junkrat</strong> · 5/7 restored · 1 partial · 1 not restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/junkrat/portrait.png" width="40" height="40" align="absmiddle" alt="Junkrat">&nbsp; Junkrat &nbsp;<code>🚧 5/7 restored</code> <sub>1 partial，1 not restored</sub></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -268,8 +268,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/mei/portrait.png" width="24" height="24" alt="Mei"> <strong>Mei</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/mei/portrait.png" width="40" height="40" align="absmiddle" alt="Mei">&nbsp; Mei &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -282,8 +282,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/torbjorn/portrait.png" width="24" height="24" alt="Torbjörn"> <strong>Torbjörn</strong> · 10/10 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/torbjorn/portrait.png" width="40" height="40" align="absmiddle" alt="Torbjörn">&nbsp; Torbjörn &nbsp;<code>✅ 10/10 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -300,8 +300,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/widowmaker/portrait.png" width="24" height="24" alt="Widowmaker"> <strong>Widowmaker</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/widowmaker/portrait.png" width="40" height="40" align="absmiddle" alt="Widowmaker">&nbsp; Widowmaker &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Keys | Status |
 | :---: | --- | --- | --- |
@@ -314,8 +314,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/roadhog/portrait.png" width="24" height="24" alt="Roadhog"> <strong>Roadhog</strong> · 6/6 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/roadhog/portrait.png" width="40" height="40" align="absmiddle" alt="Roadhog">&nbsp; Roadhog &nbsp;<code>✅ 6/6 fully restored</code></h3></summary>
 
 | Icon | Ability | Input | Status |
 | :---: | --- | --- | --- |
@@ -328,8 +328,8 @@ The full kits of McCree, Mei, Torbjörn, Widowmaker, Roadhog, and Winston have b
 
 </details>
 
-<details open>
-<summary><img src="docs/media/heroes/winston/portrait.png" width="24" height="24" alt="Winston"> <strong>Winston</strong> · 5/5 restored</summary>
+<details>
+<summary><h3><img src="docs/media/heroes/winston/portrait.png" width="40" height="40" align="absmiddle" alt="Winston">&nbsp; Winston &nbsp;<code>✅ 5/5 fully restored</code></h3></summary>
 
 | Icon | Ability | Input | Status |
 | :---: | --- | --- | --- |
