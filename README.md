@@ -93,10 +93,25 @@
 
 <!-- DOWNLOAD_LINKS -->
 <div align="center">
-  <h3><a href="https://pan.baidu.com/s/1J33yNy1CspvdWY0oxFD0tw?pwd=1234">⬇ 百度网盘下载 OWMC v1.0.0</a></h3>
-  <p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong></p>
-  <p>提取码 <kbd>1234</kbd> · 更新于 <strong>2026-11-08</strong></p>
-  <p><strong>SHA256</strong> <code>58d08b12f640c368419c91e9177f80ec840ed627aed24322cd9634935de547aa</code></p>
+
+<h3>⬇ 下载 OWMC v1.0.0 整合包</h3>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <h3><a href="https://pan.quark.cn/s/95851270ce88">夸克网盘</a></h3>
+      <sub>无需提取码</sub>
+    </td>
+    <td align="center" width="50%">
+      <h3><a href="https://pan.baidu.com/s/1J33yNy1CspvdWY0oxFD0tw?pwd=1234">百度网盘</a></h3>
+      <sub>提取码 <kbd>1234</kbd></sub>
+    </td>
+  </tr>
+</table>
+
+<p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong> · 更新于 <strong>2026-11-08</strong></p>
+<p><strong>SHA256</strong> <code>58d08b12f640c368419c91e9177f80ec840ed627aed24322cd9634935de547aa</code></p>
+
 </div>
 <!-- /DOWNLOAD_LINKS -->
 
