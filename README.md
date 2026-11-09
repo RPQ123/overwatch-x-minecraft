@@ -376,3 +376,8 @@
 ## 作者
 
 [在 B 站关注作者](https://space.bilibili.com/13152709)
+
+<p align="center">
+  <a href="https://www.bilibili.com/video/BV1DzWn6zE6W/"><img src="docs/media/bilibili-cover.jpg" width="720" alt="B 站视频：【开源整合包】让你在 mc 里玩守望先锋！"></a><br>
+  <sub>▶ <a href="https://www.bilibili.com/video/BV1DzWn6zE6W/">在 B 站观看视频：【开源整合包】让你在 mc 里玩守望先锋！</a></sub>
+</p>

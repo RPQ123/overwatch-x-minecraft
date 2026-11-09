@@ -177,3 +177,7 @@
 | [heroes/winston/barrier-projector.png](heroes/winston/barrier-projector.png) | [Ability_Barrier_Projector.png](https://overwatch.weirdgloop.org/w/File:Ability_Barrier_Projector.png) | [下载](https://overwatch.weirdgloop.org/images/Ability_Barrier_Projector.png?f022a) | 2014-11-12 |
 | [heroes/winston/primal-rage.png](heroes/winston/primal-rage.png) | [Ultimate_Primal_Rage.png](https://overwatch.weirdgloop.org/w/File:Ultimate_Primal_Rage.png) | [下载](https://overwatch.weirdgloop.org/images/Ultimate_Primal_Rage.png?fa61e) | 2014-11-12 |
 | [heroes/winston/melee.png](heroes/winston/melee.png) | [Quick_melee.png](https://overwatch.weirdgloop.org/w/File:Quick_melee.png) | [下载](https://overwatch.weirdgloop.org/images/Quick_melee.png?4277c) | 2019-04-10 |
+
+## B 站视频封面
+
+`bilibili-cover.jpg`：作者提供的 B 站视频封面，1280×720 JPEG，链接 https://www.bilibili.com/video/BV1DzWn6zE6W/ 。

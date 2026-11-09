@@ -376,3 +376,8 @@ Project-owned code is licensed under the [MIT License](LICENSE), copyright **202
 ## Author
 
 [Follow the author on Bilibili](https://space.bilibili.com/13152709)
+
+<p align="center">
+  <a href="https://www.bilibili.com/video/BV1DzWn6zE6W/"><img src="docs/media/bilibili-cover.jpg" width="720" alt="Bilibili video: Play Overwatch in Minecraft (open-source modpack)"></a><br>
+  <sub>▶ <a href="https://www.bilibili.com/video/BV1DzWn6zE6W/">Watch the video on Bilibili</a></sub>
+</p>
