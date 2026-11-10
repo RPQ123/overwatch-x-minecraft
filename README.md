@@ -99,11 +99,11 @@
 <table>
   <tr>
     <td align="center" width="50%">
-      <h3><a href="https://pan.quark.cn/s/95851270ce88">夸克网盘</a></h3>
+      <h3><a href="https://pan.quark.cn/s/d2da4813a263">夸克网盘</a></h3>
       <sub>无需提取码</sub>
     </td>
     <td align="center" width="50%">
-      <h3><a href="https://pan.baidu.com/s/1J33yNy1CspvdWY0oxFD0tw?pwd=1234">百度网盘</a></h3>
+      <h3><a href="https://pan.baidu.com/s/19Z-QdYhhBV3o9g6SsVXupQ?pwd=1234">百度网盘</a></h3>
       <sub>提取码 <kbd>1234</kbd></sub>
     </td>
   </tr>

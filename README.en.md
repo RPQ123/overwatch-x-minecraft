@@ -99,11 +99,11 @@ This is a non-commercial fan project, unaffiliated with Blizzard Entertainment, 
 <table>
   <tr>
     <td align="center" width="50%">
-      <h3><a href="https://pan.quark.cn/s/95851270ce88">Quark Drive</a></h3>
+      <h3><a href="https://pan.quark.cn/s/d2da4813a263">Quark Drive</a></h3>
       <sub>No extraction code</sub>
     </td>
     <td align="center" width="50%">
-      <h3><a href="https://pan.baidu.com/s/1J33yNy1CspvdWY0oxFD0tw?pwd=1234">Baidu Netdisk</a></h3>
+      <h3><a href="https://pan.baidu.com/s/19Z-QdYhhBV3o9g6SsVXupQ?pwd=1234">Baidu Netdisk</a></h3>
       <sub>Extraction code <kbd>1234</kbd></sub>
     </td>
   </tr>
