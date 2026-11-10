@@ -2,7 +2,7 @@
 from modpack.config import paths
 import argparse,hashlib,json,shutil,urllib.request,zipfile
 from pathlib import Path
-import psutil
+from process_images import game_processes
 from configure_passthrough import ROOT,SETTINGS,SAVES,world_name
 
 NAME='twilightforest-fabric-1.21.1-4.8.754.jar'
@@ -13,12 +13,8 @@ PROFILE=paths().get('profile')
 SNAPSHOT=ROOT/'research/twilight-settings-before.json'
 
 def stopped():
-    for proc in psutil.process_iter(['name','cmdline']):
-        try:
-            info=dict(proc.info or {});args=info.get('cmdline') or []
-            if (info.get('name') or '').lower() in ('java.exe','javaw.exe') and str(PROFILE) in args:
-                raise RuntimeError('Save and stop the project session before changing its mod profile')
-        except (psutil.NoSuchProcess,psutil.AccessDenied):continue
+    if game_processes(profiles=(PROFILE,),java=paths().get('java')):
+        raise RuntimeError('请先保存并结束游戏，再修改独立档案。')
 
 def validate(path):
     data=path.read_bytes()

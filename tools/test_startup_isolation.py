@@ -1,4 +1,5 @@
 """Synthetic audio, process and HWND fixtures for startup isolation and recovery."""
+from dataclasses import asdict
 from pathlib import Path
 import tempfile
 import time
@@ -7,7 +8,7 @@ from unittest.mock import Mock, patch
 
 from modpack.config import OW_SHA256, PackPaths, read_json
 from startup_cover import LoadingCancelled
-from startup_isolation import CREATE_SUSPENDED, JOURNAL, Lease, StartupIsolation, Target, recover_startup_isolation
+from startup_isolation import JOURNAL, Lease, StartupIsolation, Target, recover_startup_isolation
 
 
 class Volume:
@@ -112,11 +113,18 @@ class IsolationFixtures(unittest.TestCase):
         self.assertEqual(volume.writes, [])
         self.assertFalse(self.journal.exists())
 
+    def p3_window_lease(self):
+        for hwnd, target in ((101,self.ow),(201,self.mc)):
+            self.lease.input.append(dict(hwnd=hwnd,token=hwnd,target=asdict(target)))
+            self.windows.tags[hwnd]=hwnd
+            self.windows.state[hwnd]=False
+        self.lease.save()
+
     def test_crash_recovery_restores_exact_instance_and_window_marker(self):
         volume = Volume()
         original = session(10, volume)
         self.lease.visit_audio(original, self.targets, lock=True)
-        self.lease.lock_windows(self.targets.values())
+        self.p3_window_lease()
         self.assertFalse(self.windows.enabled(101))
         self.assertFalse(self.windows.enabled(201))
         other = Volume(True)
@@ -134,7 +142,7 @@ class IsolationFixtures(unittest.TestCase):
         self.assertFalse(self.journal.exists())
 
     def test_recovery_leaves_a_reused_window_untouched(self):
-        self.lease.lock_windows(self.targets.values())
+        self.p3_window_lease()
         self.windows.tags.pop(101)  # The handle now represents a newly created disabled window.
         Lease(self.paths, self.windows).restore_windows()
         self.assertFalse(self.windows.enabled(101))
@@ -156,15 +164,7 @@ class IsolationFixtures(unittest.TestCase):
         self.assertEqual((inherited.writes,other.writes), ([False], []))
         self.assertFalse(self.journal.exists())
 
-    def test_allow_ow_focus_restores_only_its_hwnd_before_full_release(self):
-        self.lease.lock_windows(self.targets.values())
-        self.lease.restore_windows('ow')
-        self.lease.lock_windows(self.targets.values(), ow_can_focus=True)
-        self.assertEqual(self.windows.state, {101:True,102:False,201:False})
-        self.lease.restore_windows()
-        self.assertEqual(self.windows.state, {101:True,102:False,201:True})
-
-    def test_every_guard_context_exit_restores_audio_window_and_native_event(self):
+    def test_every_guard_context_exit_restores_audio_and_leaves_windows_enabled(self):
         for reason in (None, RuntimeError('failed'), TimeoutError('expired'), LoadingCancelled('cancelled')):
             with self.subTest(reason=reason):
                 volume = Volume()
@@ -182,10 +182,12 @@ class IsolationFixtures(unittest.TestCase):
                     try:
                         with gate:
                             deadline = time.monotonic() + 1
-                            while not (volume.value and not self.windows.enabled(101)):
+                            while not volume.value:
                                 if time.monotonic() >= deadline:
                                     self.fail('fake guard did not apply its lease')
                                 time.sleep(.01)
+                            self.assertTrue(self.windows.enabled(101))
+                            self.assertTrue(self.windows.enabled(201))
                             if reason:
                                 raise reason
                     except (RuntimeError, TimeoutError) as error:
@@ -220,23 +222,33 @@ class IsolationFixtures(unittest.TestCase):
             self.assertFalse(gate.thread.is_alive())
             self.assertEqual(volume.writes, [True, False])
             self.assertFalse(self.journal.exists())
-            closed.assert_called_once()
+            closed.assert_not_called()
+        closed.assert_called_once()
 
-    def test_native_identity_and_event_are_registered_before_resuming(self):
+    def test_audio_failure_does_not_close_the_native_gate_early(self):
+        gate = StartupIsolation(self.paths)
+        closed = Mock()
+        gate.events.append(closed)
+        with patch('startup_isolation.CoreAudio',side_effect=OSError('endpoint unavailable')), gate:
+            gate.thread.join(1)
+            self.assertFalse(gate.thread.is_alive())
+            closed.assert_not_called()
+        closed.assert_called_once()
+
+    def test_native_identity_and_event_are_registered_without_suspending_game(self):
         gate = StartupIsolation(self.paths)
         native = Mock(create_time=Mock(return_value=1.))
         child = Mock(pid=10)
         event = Mock()
-        def resume():
-            self.assertEqual(gate.targets[10], self.ow)
-            event.assert_called_once_with(10)
-        native.resume.side_effect = resume
         with patch('startup_isolation.sha256', return_value=OW_SHA256), \
              patch('startup_isolation.subprocess.Popen', return_value=child) as spawn, \
              patch('startup_isolation.psutil.Process', return_value=native), \
              patch('startup_isolation.native_input_event', event):
             self.assertIs(gate.spawn([self.ow.executable], role='ow'), child)
-        self.assertTrue(spawn.call_args.kwargs['creationflags'] & CREATE_SUSPENDED)
+        self.assertEqual(gate.targets[10], self.ow)
+        event.assert_called_once_with(10)
+        self.assertNotIn('creationflags',spawn.call_args.kwargs)
+        native.resume.assert_not_called()
         child.kill.assert_not_called()
 
 

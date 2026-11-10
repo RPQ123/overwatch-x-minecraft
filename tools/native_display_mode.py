@@ -220,15 +220,9 @@ def verified_native(pid):
 
 
 def any_native_running():
-    for process in psutil.process_iter(['name']):
-        try:
-            info=dict(process.info or {});name=info.get('name') or process.name()
-            if not name:raise RuntimeError('进程身份不可读，无法证明不存在（cannot prove absence）')
-            if name.casefold()==EXE.name.casefold():return True
-        except psutil.NoSuchProcess:continue
-        except (psutil.AccessDenied,OSError) as failure:
-            raise RuntimeError('进程身份不可读，无法证明不存在（cannot prove absence）') from failure
-    return False
+    from process_images import native_image, process_images
+    # A name alone can prevent a desktop mode change, never authorize one.
+    return any(native_image(name, EXE) for _, name in process_images())
 
 
 def verified_launch():

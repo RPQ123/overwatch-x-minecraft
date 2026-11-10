@@ -36,7 +36,7 @@ def verify_original_body_table(process):
         if address and reader.pointer(address)==base+0x15c4e28:matches.append(address)
     if len(matches)!=1 or struct.unpack('<3Q',process.read(base+0x15c4e28,24))!=tuple(base+rva for rva in (0xca0960,0xca0800,0xca09c0)):raise ValueError('Previous body callback is not the original restored movement table')
 
-def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,local_hero=False,empty_scene=False,body_sync=False,weapon_gate=False,emissions=False,bootstrap=False,selection_depth=False,bootstrap_map=0x08000000000002af):
+def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,local_hero=False,empty_scene=False,body_sync=False,weapon_gate=False,emissions=False,bootstrap=False,selection_depth=False,bootstrap_map=0x08000000000002af,*,loading=None):
     if empty_scene and not local_hero:raise ValueError('Empty-scene permission only applies to the fixed original hero probe')
     if sum((world_blend,pose_observer,live_passthrough,local_hero,body_sync,weapon_gate,emissions,bootstrap,selection_depth))>1:raise ValueError('Choose one fixed probe mode')
     dll = ROOT/'native-host/build/owmc-selection-depth-v1.dll' if selection_depth else ROOT/'native-host/build'/EMISSION_DLL if emissions else ROOT/'native-host/build'/GATE_DLL if weapon_gate else ROOT/'native-host/build'/BODY_DLL if body_sync else ROOT/'native-host/build/owmc-local-hero-spawn-v1.dll' if local_hero else ROOT/'native-host/build'/COMPOSITOR_DLL if live_passthrough else ROOT/'native-host/build/owmc-pose-observer-v1.dll' if pose_observer else ROOT/'native-host/build/owmc-world-blend-probe.dll' if world_blend else DLL
@@ -251,7 +251,8 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
         verified.close()
     report = dll.parent / (f'native-emissions-{pid}.json' if emissions else f'weapon-gate-{pid}.json' if weapon_gate else f'body-sync-{pid}.json' if body_sync else f'local-hero-{pid}.json' if local_hero else f'world-live-{pid}.json' if live_passthrough else f'host-pose-{pid}.json' if pose_observer else f'hand-depth-{pid}.json')
     if bootstrap:report=dll.parent/f'session-bootstrap-{pid}.json'
-    for _ in range(900 if bootstrap else 100):
+    for _ in range(900 if bootstrap else 300 if loading else 100):
+        if loading:loading.checkpoint()
         if report.is_file() and report.stat().st_mtime_ns >= started_ns:
             try:
                 result = read_report(report)
@@ -268,7 +269,13 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
                 print(json.dumps(result,indent=2));return result
             if pose_observer or live_passthrough or body_sync:
                 if result['failures']:raise RuntimeError(f'World-camera observer failed: {result}')
-                if not result.get('writes' if body_sync else 'poses') and not (body_sync and result.get('menuHeldTicks')):time.sleep(.1);continue
+                if live_passthrough and loading:
+                    # A hooked compositor can be active before its window has
+                    # drawn a pose. Observe composition separately at handoff.
+                    if result.get('pid')!=pid or result.get('probeVersion')!=COMPOSITOR_VERSION or result.get('enabled') is not True:
+                        time.sleep(.1);continue
+                elif not result.get('writes' if body_sync else 'poses') and not (body_sync and result.get('menuHeldTicks')):
+                    time.sleep(.1);continue
                 print(json.dumps(result,indent=2));return result
             if not result['restored'] or result['failures']:
                 raise RuntimeError(f'Observation failed: {result}')
@@ -278,6 +285,8 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
                 raise RuntimeError(f'No bounded world blend was captured: {result}')
             print(json.dumps(result, indent=2));return result
         time.sleep(.1)
+    if live_passthrough:
+        raise TimeoutError('OW 画面合成器未在时限内就绪。请先正常结束游戏，再重试。')
     raise TimeoutError('No completed observation; do not reload. Three-frame stop needs active presents.')
 
 if __name__ == '__main__':

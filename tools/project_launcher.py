@@ -16,6 +16,7 @@ from pathlib import Path
 import queue
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -26,7 +27,7 @@ import psutil
 
 from modpack.config import PackPaths, OW_RELATIVE, OW_SHA256
 from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress, milestones,
-                           matching_timeline, presentation_receipt)
+                           matching_timeline, presentation_receipt, startup_failure_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 EXE_RELATIVE = Path(OW_RELATIVE)
@@ -156,6 +157,16 @@ class SessionBackend:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
         if digest != TARGET_SHA256:
             raise ValueError('离线 OW 文件 SHA256 不匹配；未启动任何游戏。')
+        for directory in (self.root, self.logs, self.root/'data/tmp', self.paths.get('profile'),
+                          self.root/'native-host/build'):
+            try:
+                directory.mkdir(parents=True, exist_ok=True)
+                with tempfile.TemporaryFile(dir=directory):
+                    pass
+            except OSError as failure:
+                raise OSError(f'启动需要写入 {directory}。请将完整包解压到本地可写目录后重试。') from failure
+        if max(len(str(path)) for path in (self.native_path, self.paths.get('profile'), self.python)) > 200:
+            print('整合包路径较长。若游戏无法打开文件，请把完整包解压到更短的本地路径。', flush=True)
 
     def supervisors(self) -> list[psutil.Process]:
         paths = {self.python.resolve(), Path(sys.executable).resolve(),
@@ -259,13 +270,16 @@ class SessionBackend:
                     if 'loading_isolation_restored' in milestones(self.loading_timeline(ticket.request_id)):
                         return {**result, 'phase': 'hero-selection', 'coveredHandoff': True}
                     if release_deadline is None:
-                        release_deadline = time.monotonic() + 12
+                        release_deadline = time.monotonic() + 5
                     if time.monotonic() >= release_deadline:
-                        raise TimeoutError('未收到启动静音和输入恢复回执。')
+                        print('暂未收到音频恢复回执，游戏继续运行。', flush=True)
+                        return {**result, 'phase': 'hero-selection', 'coveredHandoff': True}
                 else:
                     ticket.checkpoint()
                 time.sleep(.1)
-            raise RuntimeError(f'启动监督进程已退出（{process.returncode}）。')
+            timeline = self.loading_timeline(ticket.request_id)
+            event = next((row for row in timeline.get('events', ()) if row.get('name') == 'startup_failed'), {})
+            raise RuntimeError(startup_failure_text(event.get('error', '')))
         except Exception:
             try:
                 process.wait(timeout=90)
@@ -285,26 +299,9 @@ class SessionBackend:
 
     def project_processes(self) -> list[psutil.Process]:
         """Exact native exe path or a JVM whose --gameDir is a project profile; never name-only."""
-        native_path = self.native_path
-        profiles = {self.paths.get('profile'), self.paths.get('aoaProfile')}
-        found = []
-        for process in psutil.process_iter(['exe', 'cmdline']):
-            try:
-                executable = process.info.get('exe')
-                if not executable:
-                    continue
-                path = Path(executable).resolve()
-                if path == native_path:
-                    found.append(process)
-                    continue
-                arguments = process.info.get('cmdline') or []
-                if path.name.lower() in ('java.exe', 'javaw.exe') and '--gameDir' in arguments:
-                    index = arguments.index('--gameDir')
-                    if index + 1 < len(arguments) and Path(arguments[index + 1]).resolve() in profiles:
-                        found.append(process)
-            except (psutil.Error, OSError, ValueError):
-                continue
-        return found
+        from process_images import game_processes
+        return game_processes(native=self.native_path, profiles=(self.paths.get('profile'), self.paths.get('aoaProfile')),
+                              java=self.paths.get('java'))
 
     def running(self) -> bool:
         """A live supervisor means the session is (being) owned; leftovers alone are not 'running'."""
@@ -972,14 +969,10 @@ class LauncherUI:
         self.loading_deadline_ns = time.perf_counter_ns() + LOAD_SECONDS * 10**9
         self.loading_step = '正在检查本地文件'
         self.loading_log = self.backend.logs/'loading-preflight.log'
-        self.loading_focus_needed = False
-        self.loading_input_held = False
         try:
-            self.loading = LoadingScreen(self.window, self.backend.root/'assets/launcher/owmc.png',
-                                         lambda: self.fail_loading('启动已取消。'), self.try_loading_focus)
+            self.loading = LoadingScreen(self.window, lambda: self.fail_loading('启动已取消。'))
         except Exception as failure:
-            self.fail_loading(str(failure))
-            return False
+            print(f'进度窗口未能打开，启动仍会继续：{failure}', flush=True)
         return True
 
     def begin_auto_loading(self):
@@ -1014,7 +1007,7 @@ class LauncherUI:
         try:
             self.end_loading('cancelled')
         except OSError as failure:
-            detail += f' 取消回执写入失败（{failure}）。'
+            print(f'取消回执写入失败：{failure}', flush=True)
         if self.loading_log.name == 'loading-preflight.log':
             try:
                 self.loading_log.parent.mkdir(parents=True, exist_ok=True)
@@ -1022,6 +1015,7 @@ class LauncherUI:
                     stream.write(f'{self.loading_step}  {detail}\n')
             except OSError:
                 pass
+        detail = startup_failure_text(detail)
         self.window.attributes('-topmost', False)
         self.action_var.set(detail[:180])
         if self.loading_error:
@@ -1036,45 +1030,30 @@ class LauncherUI:
 
     def try_loading_focus(self):
         ticket = self.loading_ticket
-        if not ticket or not self.loading or self.loading.fading:
-            return
+        if not ticket:return
         receipt = presentation_receipt(self.last_snapshot, ticket.request_id, round(time.time()*1000))
-        if receipt is None:
-            return
+        if receipt is None:return
         try:
             ticket.checkpoint()
-            self.loading_input_held = self.loading.input_held()
-            if self.loading_input_held:
-                return
-            if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt):
-                self.loading_focus_needed = True
-                return
-            self.loading.fade(lambda: self.finish_loading(ticket))
-        except (OSError, ValueError, KeyError, RuntimeError, psutil.Error) as failure:
+        except RuntimeError as failure:
             self.fail_loading(str(failure))
-
-    def finish_loading(self, ticket):
-        if self.loading_ticket is not ticket:
             return
-        receipt = presentation_receipt(self.last_snapshot, ticket.request_id, round(time.time()*1000))
-        if not receipt:
-            self.fail_loading('切换窗口时合成信号已失效。')
-            return
+        focused = False
         try:
-            self.loading_input_held = self.loading.input_held()
-            if self.loading_input_held:
-                self.loading.restore_opacity()
-                return
-            if not self.backend.focus_loading_pair(self.last_snapshot['status'], receipt, foreground_only=True):
-                self.loading_focus_needed = True
-                self.loading.restore_opacity()
-                return
-            self.end_loading('released')
+            from launcher_loading_screen import LoadingScreen
+            if not LoadingScreen.input_held():
+                focused = self.backend.focus_loading_pair(self.last_snapshot['status'], receipt)
         except (OSError, ValueError, KeyError, RuntimeError, psutil.Error) as failure:
+            print(f'未能自动聚焦游戏窗口：{failure}', flush=True)
+        if not focused:
+            self.action_var.set('游戏窗口已打开，请单击 OW 窗口进入。')
+        try:
+            self.end_loading('released')
+        except (OSError, RuntimeError) as failure:
             self.fail_loading(str(failure))
 
     def update_loading(self):
-        if not self.loading:
+        if not self.loading and not self.loading_ticket:
             return
         if time.perf_counter_ns() >= self.loading_deadline_ns:
             self.fail_loading(f'启动等待超过 {LOAD_SECONDS} 秒。')
@@ -1086,18 +1065,27 @@ class LauncherUI:
             event = next((event for event in timeline.get('events', ()) if event.get('name') == 'startup_failed'), {})
             self.fail_loading(event.get('error') or '启动监督报告失败。')
             return
+        if ticket and 'loading_presentation_skipped' in milestones(timeline):
+            self.try_loading_focus()
+            if self.loading_ticket is None:return
+            self.action_var.set('游戏已在后台启动，画面仍在连接。请单击 OW 窗口。')
+            try:
+                self.end_loading('released')
+            except (OSError, RuntimeError) as failure:
+                self.fail_loading(str(failure))
+            return
         if ticket and self.loading_step == '合成画面已连通' and not presentation_receipt(
                 self.last_snapshot, ticket.request_id, round(time.time()*1000)):
             done -= 1
             self.loading_step = '正在等待新的合成帧'
-        if not self.loading.fading:
+        if self.loading:
             try:
-                self.loading.update(done, total, self.loading_step, focus_required=self.loading_focus_needed,
-                                    input_held=self.loading_input_held)
-            except (OSError, RuntimeError) as failure:
-                self.fail_loading(str(failure))
-                return
-            self.try_loading_focus()
+                self.loading.update(done, total, self.loading_step)
+            except Exception as failure:
+                print(f'进度显示暂不可用，启动仍会继续：{failure}', flush=True)
+                self.loading.close()
+                self.loading = None
+        self.try_loading_focus()
 
     def toggle_auto_start(self) -> None:
         if self._busy():

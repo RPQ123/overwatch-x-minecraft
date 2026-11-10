@@ -377,13 +377,16 @@ class CrashTests(unittest.TestCase):
     def test_unrelated_java_and_fake_native_name_are_ignored(self):
         def process(pid, exe, args):
             p = Mock(pid=pid)
-            p.info = dict(exe=str(exe), cmdline=args)
+            p.exe.return_value = str(exe)
+            p.cmdline.return_value = args
             p.create_time.return_value = 100.
             return p
         unrelated = process(1, self.root/'java.exe', ['java', '--gameDir', str(self.root/'other')])
         fake_native = process(2, self.root/'GameClientApp.patched.exe', [])
         actual = process(3, self.root/'javaw.exe', ['java', '--gameDir', str(cycle.ROOT/'guest-passthrough-client')])
-        with patch.object(cycle.psutil, 'process_iter', return_value=[unrelated, fake_native, actual]):
+        listing=[(1,'java.exe'),(2,'gameclientapp.patched.exe'),(3,'javaw.exe')]
+        with patch('process_images.process_images',return_value=listing), \
+             patch.object(psutil,'Process',side_effect=[unrelated,fake_native,actual]):
             self.assertEqual([p['pid'] for p in cycle.project_processes()], [3])
 
     def test_pretest_backup_copies_stopped_profiles_including_saves(self):

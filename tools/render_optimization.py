@@ -2,7 +2,7 @@
 from modpack.config import paths
 import argparse, hashlib, json, urllib.request, zipfile
 from pathlib import Path
-import psutil
+from process_images import game_processes
 
 ROOT = Path(__file__).resolve().parents[1]
 PROFILE = paths().get('profile')
@@ -37,13 +37,8 @@ def install():
     target = PROFILE / 'mods' / NAME
     if target.exists():
         return verify()
-    for process in psutil.process_iter(['cmdline']):
-        try:
-            info=dict(process.info or {})
-            if str(PROFILE) in (info.get('cmdline') or []):
-                raise RuntimeError('Stop the private Minecraft session before installing its renderer')
-        except (psutil.NoSuchProcess, psutil.AccessDenied):
-            continue
+    if game_processes(profiles=(PROFILE,),java=paths().get('java')):
+        raise RuntimeError('请先保存并结束游戏，再安装渲染器。')
     request = urllib.request.Request(URL, headers={'User-Agent': 'OWMC-local-lab/1.0'})
     with urllib.request.urlopen(request, timeout=30) as response:
         data = response.read(SIZE + 1)

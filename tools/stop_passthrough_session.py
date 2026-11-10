@@ -7,6 +7,7 @@ from launch_passthrough_session import native_pids,api,write_status,PROFILE
 from native_normal_close import capture_native_identity,normal_close,NativeCloseError,EXE,PATCHED_SHA256
 from native_display_mode import restore_display
 from minecraft_save_evidence import capture as capture_save_evidence,inspect as inspect_save_evidence
+from process_images import game_processes
 
 def stop_supervisor():
     """Stop only this project's exact supervisor; caller manages native owners."""
@@ -34,20 +35,7 @@ def _profile_arguments(arguments):
 
 
 def _project_guest_processes():
-    result=[]
-    for process in psutil.process_iter(['name','exe','cmdline']):
-        try:
-            info=dict(process.info or {})
-            executable=info.get('exe')
-            name=info.get('name') or (Path(executable).name if executable else '')
-            if (name.lower() in ('java.exe','javaw.exe')
-                    and (not info.get('exe') or info.get('cmdline') is None)):
-                raise RuntimeError('Minecraft JVM identity is unreadable; cannot prove absence')
-            if (executable and Path(executable).name.lower() in ('java.exe','javaw.exe')
-                    and _profile_arguments(info.get('cmdline') or [])):
-                result.append(process)
-        except (psutil.Error,OSError):continue
-    return result
+    return game_processes(profiles=(PROFILE,),java=paths().get('java'))
 
 
 def _guest_identity():

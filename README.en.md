@@ -109,8 +109,8 @@ This is a non-commercial fan project, unaffiliated with Blizzard Entertainment, 
   </tr>
 </table>
 
-<p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong> · Updated <strong>2026-11-08</strong></p>
-<p><strong>SHA256</strong> <code>58d08b12f640c368419c91e9177f80ec840ed627aed24322cd9634935de547aa</code></p>
+<p><code>OWMC-1.0.0.zip</code> · <strong>5.46 GB</strong> · Updated <strong>2026-11-10</strong></p>
+<p><strong>SHA256</strong> <code>4c34352dde912b7faaa4e6519182f8e183d40cb738dae3a5059032e10448bda2</code></p>
 
 </div>
 <!-- /DOWNLOAD_LINKS -->

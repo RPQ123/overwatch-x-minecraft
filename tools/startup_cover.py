@@ -10,7 +10,7 @@ import psutil
 
 from modpack.config import local_path, read_json, write_json
 
-LOAD_SECONDS = 180
+LOAD_SECONDS = 360
 FRAME_MAX_AGE_MS = 1500
 START_ACTIONS = ('start', 'toggle', 'reboot', 'restart')
 
@@ -84,7 +84,7 @@ class LoadingTicket:
     def checkpoint(self):
         state = self.state()
         if state != 'pending':
-            raise LoadingCancelled('启动等待超过 180 秒。' if state == 'timeout' else '启动加载已取消。')
+            raise LoadingCancelled(f'启动等待超过 {LOAD_SECONDS} 秒。' if state == 'timeout' else '启动加载已取消。')
 
     def finish(self, decision):
         if decision not in ('released', 'cancelled'):
@@ -113,6 +113,8 @@ def loading_progress(preflight_ok, timeline):
         step = '正在检查本地文件'
     elif 'loading_presentation_ready' in events:
         step = '合成画面已连通'
+    elif 'loading_presentation_skipped' in events:
+        step = '游戏窗口已打开，画面仍在连接'
     elif 'mc_world_ready' in events and 'native_weapon_graph_ready' in events:
         step = '正在连接画面'
     elif 'mc_world_ready' not in events:
@@ -122,6 +124,27 @@ def loading_progress(preflight_ok, timeline):
     else:
         step = '正在载入英雄'
     return done, total, step
+
+
+def startup_failure_text(detail):
+    """Keep diagnostics in the log and show an actionable description in the UI."""
+    value = str(detail)
+    lower = value.casefold()
+    if any(code in lower for code in ('winerror 126', '0xc0000135', 'winerror 14001')):
+        return 'Windows 无法加载所需运行库。请重新解压完整包，确认包内 VC++ 运行库未被安全软件隔离。'
+    if any(code in lower for code in ('winerror 5]', 'winerror 32', 'permission denied', 'winerror 362', 'winerror 206')):
+        return 'Windows 拒绝读取或写入整合包。请检查安全软件记录，把完整包解压到本地可写的较短路径后重试。'
+    if any(code in lower for code in ('dxgi_error_device', '0x887a0005', '0x887a0006', '0x887a0007')):
+        return '显卡停止响应或驱动重置。请正常结束游戏，确认显卡驱动可用后重试。'
+    if 'no completed observation' in lower or 'verifying world-live' in lower:
+        return 'OW 未能及时输出画面。请先用启动器正常结束游戏，再重试。若再次出现，请附本次日志。'
+    if any('\u4e00' <= char <= '\u9fff' for char in value):
+        return value.splitlines()[0]
+    if 'waiting for the real saved minecraft world' in lower:
+        return 'Minecraft 未在本阶段时限内载入世界。请查看日志并在磁盘空闲后重试。'
+    if 'waiting for' in lower:
+        return '当前启动阶段等待超时。请正常结束游戏后重试，并保留本次日志。'
+    return '游戏启动未完成。请正常结束游戏后重试。详细原因见本次日志。'
 
 
 def matching_timeline(snapshot, request_id):
@@ -156,7 +179,8 @@ class CompositionGate:
         host = generation(report.get('generation'))
         source = generation(guest.get('generation'))
         wall = report.get('sampleWallMs')
-        counters = tuple(report.get(key) for key in ('frames', 'blended', 'unmaskedFrames', 'colorUploads', 'lastMcFrame'))
+        counters = (report.get('presentOk', report.get('frames')),
+                    *(report.get(key) for key in ('blended', 'unmaskedFrames', 'colorUploads', 'lastMcFrame')))
         published = guest.get('published')
         if (guest.get('sourcePid') != guest_pid or guest.get('mode') != 'full-world-frame-proof'
                 or guest.get('failed') is not False or not (guest.get('player') or {}).get('alive')

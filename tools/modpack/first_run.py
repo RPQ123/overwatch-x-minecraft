@@ -36,8 +36,8 @@ def environment(root: Path, *, gpu: bool = True) -> dict:
     add('系统', 'ok' if windows and build >= 19041 and struct.calcsize('P') == 8 else 'error',
         f'{platform.system()} {platform.release()} / {platform.machine()} / build {build}；需要 64 位 Windows 10 2004 或更新版本')
     memory = psutil.virtual_memory().total / 1024**3
-    add('内存', 'ok' if memory >= 16 else 'warning' if memory >= 8 else 'error',
-        f'{memory:.1f} GiB；建议至少 16 GiB，8 GiB 以下不进入安装')
+    add('内存', 'ok' if memory >= 16 else 'warning',
+        f'{memory:.1f} GiB；建议至少 16 GiB。内存较少时可先关闭其他大型程序。')
     free = shutil.disk_usage(root).free / 1024**3
     add('磁盘', 'ok' if free >= 15 else 'error',
         f'整合包所在卷可用 {free:.1f} GiB；准备 MC 至少预留 15 GiB，OW 与存档另计')

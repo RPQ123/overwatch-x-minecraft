@@ -2,7 +2,7 @@
 from modpack.config import paths
 import hashlib,json,urllib.request,zipfile,io
 from pathlib import Path
-import psutil
+from process_images import game_processes
 
 ROOT=Path(__file__).resolve().parents[1]
 PROFILE=paths().get('profile')
@@ -11,11 +11,8 @@ IRIS=('iris-fabric-1.8.14-beta.1+mc1.21.1.jar','https://cdn.modrinth.com/data/YL
 PACK=('MakeUp-UltraFast-9.5g.zip','https://cdn.modrinth.com/data/izsIPI7a/versions/pgb0JjoN/MakeUp-UltraFast-9.5g.zip',405096,'90a2f75eb073eaae5fe65f2ea5f8d656c122760c07ff75306728df4b162c42f88be531f026d174e035fea153f0ac5e227e8885d8b199335d3beadb6a58f79239')
 
 def stopped():
-    for p in psutil.process_iter(['cmdline']):
-        try:
-            info=dict(p.info or {})
-            if str(PROFILE) in (info.get('cmdline') or []):raise RuntimeError('先关闭两款游戏，再切换光影')
-        except (psutil.AccessDenied,psutil.NoSuchProcess):pass
+    if game_processes(profiles=(PROFILE,),java=paths().get('java')):
+        raise RuntimeError('先关闭两款游戏，再切换光影')
 
 def artifact(folder,item):
     name,url,size,digest=item;path=folder/name

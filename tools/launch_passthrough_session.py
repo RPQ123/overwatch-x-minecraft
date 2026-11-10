@@ -2,7 +2,7 @@
 import time as _startup_time
 _PYTHON_ENTERED_NS=_startup_time.perf_counter_ns()
 from modpack.config import paths
-import argparse,ctypes,hashlib,json,os,subprocess,sys,time,urllib.request
+import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import psutil
@@ -46,6 +46,7 @@ from native_armory_binding import prepare as prepare_armory,UnsupportedArmory
 from window_layout import arrange as arrange_windows
 from native_runtime_settings import apply_render_profile
 from startup_render_budget import budget as startup_render_budget
+from process_images import game_processes
 from native_hover_response import apply as apply_hover_response
 from native_mccree_profile import apply as apply_mccree_profile
 from native_hero_profiles import HERO_IDS
@@ -252,7 +253,9 @@ def connect_stages(pid,prefixes=None,*,loading=None):
             for attempt in range(attempts):
                 if loading:loading.checkpoint()
                 try:
-                    attach(pid,**{MODES[prefix]:True});break
+                    arguments={MODES[prefix]:True}
+                    if loading and prefix=='world-live':arguments['loading']=loading
+                    attach(pid,**arguments);break
                 except ValueError as failure:
                     if prefix!='weapon-gate' or 'Unexpected native hero flags/Volley nodes' not in str(failure) or attempt+1==attempts:
                         raise
@@ -260,6 +263,16 @@ def connect_stages(pid,prefixes=None,*,loading=None):
             wait('Verifying '+prefix,lambda:stage_ready(pid,prefix,created_ns),10,**options)
 def api(route,post=False,*,timeout=2):
     with urllib.request.urlopen(urllib.request.Request('http://127.0.0.1:32133/'+route,method='POST' if post else 'GET'),timeout=timeout) as response:return json.load(response)
+
+def require_bridge_port():
+    with socket.socket() as probe:
+        probe.settimeout(.25)
+        try:
+            occupied = probe.connect_ex(('127.0.0.1', 32133)) == 0
+        except TimeoutError:
+            return  # A slow check is not proof that a listener exists.
+    if occupied:
+        raise RuntimeError('本地端口 32133 已被占用。请正常退出旧游戏或占用该端口的程序，再重试。')
 
 
 def finish_guest_after_native_exit(recovery,record,*,output=None):
@@ -330,23 +343,8 @@ def wait(label,fn,seconds=60,*,interval=.05,loading=None):
         if remaining>0:time.sleep(min(interval,remaining))
     raise TimeoutError(label+': '+last)
 def native_pids():
-    found=[]
-    for p in psutil.process_iter(['pid','name','exe']):
-        try:
-            # process_iter caches Process instances shared by parallel scanners.
-            # Another attrs selection can replace .info between two accesses.
-            info=dict(p.info or {});executable=info.get('exe')
-            if executable and Path(executable).resolve()==EXE.resolve():found.append(info.get('pid') or p.pid)
-            elif not executable:
-                name=info.get('name')
-                if not name:
-                    try:name=p.name()
-                    except psutil.AccessDenied as failure:
-                        raise RuntimeError('进程身份不可读，无法证明不存在（cannot prove absence）') from failure
-                if (name or '').lower()==EXE.name.lower():
-                    raise RuntimeError('原版客户端身份不可读，无法证明不存在（cannot prove absence）')
-        except (psutil.Error,OSError):pass
-    if len(found)>1:raise RuntimeError('Multiple original clients are open; preserve them and resolve the duplicate')
+    found=[process.pid for process in game_processes(native=EXE)]
+    if len(found)>1:raise RuntimeError('本整合包有多个原版 OW 在运行。请逐个正常退出，再重新启动。')
     return found
 def native_ready(pid):
     p=ResearchProcess(pid)
@@ -425,7 +423,7 @@ def launch_guest(visible,timeline=None,*,display_settings=None,loading=None,isol
     command[:]=[value for value in command if not value.startswith(('-Dowmc.startHidden=','-Dowmc.allowWindowShow='))]
     if loading:
         # prepare() keeps pauseOnLostFocus=false and fullscreen=false. The
-        # overlay handles visibility; neither GLFW hide path should run.
+        # progress window does not cover either renderer. Keep GLFW visible.
         command[:]=[value for value in command if not value.startswith('-Dowmc.backgroundExport=')]
         command[1:1]=['-Dowmc.startHidden=false','-Dowmc.backgroundExport=false']
     else:
@@ -444,15 +442,14 @@ def launch_guest(visible,timeline=None,*,display_settings=None,loading=None,isol
     if timeline:timeline.mark('mc_jvm_spawned',pid=process.pid,creation=psutil.Process(process.pid).create_time())
     startup_log=GuestStartupLog(PROFILE/'logs/launch.log',timeline)
     def ready():
-        if isolation:isolation.check()
         startup_log.poll()
         if loading and process.poll() is not None:
-            raise RuntimeError('Minecraft 在世界就绪前已退出。')
+            raise RuntimeError(f'Minecraft 在世界就绪前已退出（0x{process.returncode & 0xffffffff:08X}）。')
         guest=guest_ready(timeout=.25)
         if loading and guest and guest.get('sourcePid')!=process.pid:
             raise RuntimeError('Minecraft 就绪信号来自另一进程。')
         return guest
-    guest=wait('Waiting for the real saved Minecraft world',ready,90,interval=.1,loading=loading)
+    guest=wait('Waiting for the real saved Minecraft world',ready,240 if loading else 90,interval=.1,loading=loading)
     startup_log.poll()
     if timeline:timeline.mark('mc_world_ready',pid=guest['sourcePid'],published=guest['published'])
     return guest
@@ -577,7 +574,11 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolat
         restore_display()
         # Renderer/UI dimensions are cached at creation. A post-creation mode
         # switch can leave a visible but unclickable picker or held composition.
-        prepare_display(settings)
+        try:prepare_display(settings)
+        except (OSError,ValueError) as failure:
+            restore_display()  # A change already made must be restored first.
+            settings['nativeFullscreen']=False
+            print(f'显示模式不可用，已使用原桌面的窗口模式：{failure}',flush=True)
         # The original game is the user's play/hero-selection window.
         if timeline:timeline.mark('native_spawn_requested')
         # The independent console guard only operates on verified console HWNDs.
@@ -588,7 +589,8 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolat
             if isolation:
                 spawn = isolation.spawn
                 spawn_options['role'] = 'ow'
-            pid=spawn([str(EXE)],cwd=EXE.parent,creationflags=subprocess.CREATE_NO_WINDOW,**spawn_options).pid
+            child=spawn([str(EXE)],cwd=EXE.parent,creationflags=subprocess.CREATE_NO_WINDOW,**spawn_options)
+            pid=child.pid
         except OSError:
             restore_display()
             raise
@@ -599,15 +601,21 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolat
         native_identity=verified_owner(pid,psutil.Process(pid).create_time())
         native_created=native_identity.create_time()
         def ready_visible():
-            if isolation:isolation.check()
             if loading and not native_identity.is_running():
-                raise RuntimeError('OW 在原版场景就绪前已退出。')
-            reveal_native_render(pid,native_created,native=native_identity)
+                raise RuntimeError(f'OW 在场景就绪前已退出（0x{(child.poll() or 0) & 0xffffffff:08X}）。')
+            try:reveal_native_render(pid,native_created,native=native_identity)
+            except OSError:
+                pass  # The original can finish loading while its window is being created.
             return cold_ready(pid,timeline)
-        wait('Waiting for the supplied original client/plugin',ready_visible,150,loading=loading)
+        wait('Waiting for the supplied original client/plugin',ready_visible,180 if loading else 150,loading=loading)
     if timeline:timeline.mark('native_client_ready',pid=pid)
-    startup_render_budget.start(pid,settings,timeline)
-    display_mode=acquire_display(pid,settings)
+    try:startup_render_budget.start(pid,settings,timeline)
+    except (OSError, ValueError, RuntimeError) as failure:
+        print(f'启动限帧不可用，已继续启动：{failure}',flush=True)
+    try:display_mode=acquire_display(pid,settings)
+    except (OSError,ValueError) as failure:
+        display_mode=dict(managed=False,warning='暂未取得窗口显示模式。')
+        print(f'未能读取游戏显示模式，已继续启动：{failure}',flush=True)
     if settings.get('displayWarnings'):display_mode['warning']=settings['displayWarnings'][-1]
     if guest is not None and not loading:arrange_visible_windows(pid,guest,settings,reveal=False)
     if timeline:timeline.mark('native_bootstrap_started')
@@ -626,7 +634,7 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolat
         attach(pid,local_hero=True)
     if timeline:timeline.mark('native_hero_spawn_complete',alreadySpawned=has_hero)
     if timeline:timeline.mark('native_weapon_graph_wait_started')
-    wait('Waiting for the original Genji model and weapon graph',lambda:native_ready(pid),45,loading=loading)
+    wait('Waiting for the original Genji model and weapon graph',lambda:native_ready(pid),60 if loading else 45,loading=loading)
     if timeline:timeline.mark('native_weapon_graph_ready')
     return pid,display_mode
 
@@ -659,42 +667,72 @@ def _launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None,isolati
 
 def launch_pair(settings,map_id,guest=None,timeline=None,*,loading=None,isolation=None):
     try:return _launch_pair(settings,map_id,guest,timeline,loading=loading,isolation=isolation)
-    finally:startup_render_budget.restore()
+    finally:
+        try:startup_render_budget.restore()
+        except (OSError, ValueError, RuntimeError) as failure:
+            print(f'启动限帧未能恢复：{failure}',flush=True)
 
 
-def await_loading_handoff(pid, guest, settings, loading, record, timeline, *, isolation=None):
+def await_loading_handoff(pid, guest, loading, record, timeline):
     from window_layout import guest_window_owner, render_pair
     native = psutil.Process(pid)
-    minecraft = guest_window_owner(paths(), guest['sourcePid'])
+    minecraft = psutil.Process(guest['sourcePid'])
     native_created = native.create_time()
     guest_created = minecraft.create_time()
 
     def pair():
-        if not native.is_running() or not minecraft.is_running():
-            raise RuntimeError('合成就绪前游戏进程已退出。')
+        if guest_window_owner(paths(), minecraft.pid).create_time() != guest_created:
+            raise ValueError('Minecraft 窗口身份已变化。')
         return render_pair(pid, minecraft.pid)
 
-    wait('Waiting for both visible render windows', pair, 15, loading=loading)
-    if settings.get('showMinecraft'):
-        arrange_windows(pid, minecraft.pid, int(settings.get('minecraftWindowWidth', 960)),
-                        int(settings.get('minecraftWindowHeight', 540)), covered=True,
-                        native_fullscreen=bool(settings.get('nativeFullscreen', False)))
     arranged_ms = round(time.time()*1000)
-    timeline.mark('loading_windows_arranged')
     gate = CompositionGate()
     last_receipt = None
+    fallback = False
+    last_report = {}
+    presentation_deadline = time.monotonic() + 15
+
+    def receipt(ow, mc, evidence):
+        return dict(evidence, requestId=loading.request_id, supervisorPid=os.getpid(),
+                    nativePid=pid, nativeCreated=native_created, nativeHwnd=ow.handle,
+                    guestPid=minecraft.pid, guestCreated=guest_created, guestHwnd=mc.handle)
+
+    def publish(value):
+        record.update(phase='hero-selection', heartbeatMs=round(time.time()*1000))
+        if value:record['startupPresentation']=value
+        else:record.pop('startupPresentation',None)
+        write_status(record)
 
     def advance():
-        nonlocal last_receipt
+        nonlocal last_receipt,fallback,last_report
         if loading.state() == 'released':
-            if last_receipt is None:
+            if last_receipt is None and not fallback:
                 raise RuntimeError('当前请求没有合成回执。')
             return True
         loading.checkpoint()
-        if isolation:isolation.check()
-        ow, mc = pair()
-        report = read_report(BUILD/f'world-live-{pid}.json')
-        sample = api('health', timeout=.25)
+        if not native.is_running() or not minecraft.is_running():
+            raise RuntimeError('交接前游戏进程已退出。请查看本次日志。')
+        if fallback:return None
+        if time.monotonic() >= presentation_deadline:
+            try:
+                ow,mc=pair()
+                last_receipt=receipt(ow,mc,dict(observedMs=round(time.time()*1000),frameVerified=False))
+            except (OSError, ValueError, psutil.Error):
+                last_receipt=None  # Leave unverified windows untouched.
+            fallback=True
+            publish(last_receipt)
+            timeline.mark('loading_presentation_skipped',report=last_report)
+            print('游戏已在后台启动，合成帧尚未验证，已继续交接。',flush=True)
+            return None
+        try:
+            ow,mc=pair()
+            report=read_report(BUILD/f'world-live-{pid}.json')
+            sample=api('health', timeout=.25)
+        except (OSError, ValueError, psutil.Error):
+            gate.previous=None
+            return None
+        last_report={key:report.get(key) for key in ('frames','poses','presentOk','presentOccluded','presentTests',
+                                                    'lastPresentHresult','blended','viewMode')}
         now = round(time.time() * 1000)
         evidence = gate.observe(sample, report, pid, minecraft.pid, now)
         if (report.get('probeVersion') != COMPOSITOR_VERSION
@@ -704,14 +742,9 @@ def await_loading_handoff(pid, guest, settings, loading, record, timeline, *, is
             evidence = None
             gate.previous = None
         if evidence:
-            if isolation and (report.get('startupInputBlocked') is not True or not isolation.allow_ow_focus()):
-                return None
-            last_receipt = dict(evidence, requestId=loading.request_id, supervisorPid=os.getpid(),
-                                nativePid=pid, nativeCreated=native_created, nativeHwnd=ow.handle,
-                                guestPid=minecraft.pid, guestCreated=guest_created, guestHwnd=mc.handle)
-            timeline.mark('loading_presentation_ready')
-            record.update(phase='hero-selection', startupPresentation=last_receipt, heartbeatMs=now)
-            write_status(record)
+            last_receipt=receipt(ow,mc,dict(evidence,frameVerified=True))
+            timeline.mark('loading_presentation_ready',report=last_report)
+            publish(last_receipt)
         elif last_receipt and (now-last_receipt['observedMs'] > FRAME_MAX_AGE_MS or gate.previous is None):
             last_receipt = None
             record.pop('startupPresentation', None)
@@ -756,16 +789,27 @@ def initialize_session(settings,timeline,loading,*,isolation=None):
     if isolation:options['isolation']=isolation
     if loading and guest:
         raise RuntimeError('覆盖式启动需要全新会话，请先正常关闭已有 Minecraft。')
+    if cold_guest:require_bridge_port()
     guest,pid,display_mode=launch_pair(settings,map_id,guest,timeline,**options)
     manifest['guest\\build\\libs\\owmc-guest-0.1.0.jar']=hashlib.sha256((PROFILE/'mods/owmc-guest-0.1.0.jar').read_bytes()).hexdigest()
-    if not loading and cold_guest and settings.get('startupParallel',True):arrange_visible_windows(pid,guest,settings,reveal=False)
+    if loading:
+        try:
+            from window_layout import guest_window_owner
+            minecraft=guest_window_owner(paths(),guest['sourcePid'])
+            arrange_windows(pid,minecraft.pid,covered=True,native_fullscreen=bool(settings.get('nativeFullscreen',False)),
+                            show_minecraft=bool(settings.get('showMinecraft',True)))
+            if timeline:timeline.mark('loading_windows_arranged')
+        except (OSError, ValueError, RuntimeError, psutil.Error) as failure:
+            print(f'暂未自动排列窗口，已继续启动：{failure}',flush=True)
+    elif cold_guest and settings.get('startupParallel',True):arrange_visible_windows(pid,guest,settings,reveal=False)
     if timeline:timeline.mark('compositor_attach_started')
     stage_options={'loading':loading} if loading else {}
     connect_stages(pid,{'world-live'},**stage_options)
     if timeline:
         presentation=read_report(BUILD/f'world-live-{pid}.json')
         timeline.mark('compositor_ready',report={key:presentation.get(key) for key in (
-            'pid','probeVersion','enabled','failures','blended','lastMcFrame','lastMcGeneration','frames','poses','viewMode')})
+            'pid','probeVersion','enabled','failures','blended','lastMcFrame','lastMcGeneration','frames','poses','viewMode',
+            'presentOk','presentOccluded','presentTests','lastPresentHresult')})
     # The bootstrap's original Genji is initialized behind the animated picker.
     # Install the shared native weapon observers there, before the user can
     # confirm an uncalibrated initial hero. Body coupling still waits for the
@@ -774,13 +818,16 @@ def initialize_session(settings,timeline,loading,*,isolation=None):
     if timeline:timeline.mark('native_observers_ready')
     if not loading:arrange_visible_windows(pid,guest,settings)
     if settings.get('hideHeroPrompt'):
-        process=ResearchProcess(pid)
-        try:hide(process,pid)
-        finally:process.close()
+        try:
+            process=ResearchProcess(pid)
+            try:hide(process,pid)
+            finally:process.close()
+        except (OSError, ValueError, RuntimeError) as failure:
+            print(f'原版英雄提示保持原样：{failure}',flush=True)
     record={'ready':False,'phase':'hero-selection','nativePid':pid,'startedMs':round(time.time()*1000),
             'settings':settings,'loadedFiles':manifest,'state':None,'heroHealth':None,
             'nativeDisplayMode':display_mode}
-    if loading:await_loading_handoff(pid,guest,settings,loading,record,timeline,isolation=isolation)
+    if loading:await_loading_handoff(pid,guest,loading,record,timeline)
     return record,guest,pid,files
 
 
@@ -800,11 +847,13 @@ def run(settings,timeline=None,*,loading=None):
     settings=record['settings']
     arrange_visible_windows(pid,recovery.guest,settings)
     connect_stages(pid)
-    quality_process=ResearchProcess(pid)
     try:
-        quality=apply_render_profile(quality_process,pid,settings.get('nativeRenderProfile','medium'))
-    finally:
-        quality_process.close()
+        quality_process=ResearchProcess(pid)
+        try:quality=apply_render_profile(quality_process,pid,settings.get('nativeRenderProfile','medium'))
+        finally:quality_process.close()
+    except (OSError,ValueError,RuntimeError) as failure:
+        print(f'OW 画质保持原样：{failure}',flush=True)
+        quality=dict(profile='unchanged',applied={})
     print('Applied Overwatch video profile: '+quality['profile'],flush=True)
     bindings=HeroBindingRefresh(settings)
     manifest={paths().store_path(path):hashlib.sha256(path.read_bytes()).hexdigest() for path in files}

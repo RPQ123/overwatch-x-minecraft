@@ -45,6 +45,8 @@ HMODULE moduleHandle;IDXGISwapChain* swap=nullptr;ID3D11DeviceContext* context=n
 void **oldSwap=nullptr,**newSwap=nullptr,**oldContext=nullptr,**newContext=nullptr;
 std::atomic<bool> active{false},finished{false},restored{false},stopRequested{false};
 std::atomic<unsigned> frames{0},poses{0},failures{0};
+std::atomic<unsigned> presentOk{0},presentOccluded{0},presentTests{0};
+std::atomic<uint32_t> lastPresentHresult{0};
 std::shared_ptr<const std::string> failureMessage;
 void fail(const char* where,const std::exception& error) {
     auto message=std::make_shared<const std::string>(std::string(where)+": "+error.what());
@@ -571,6 +573,10 @@ HRESULT WINAPI present(IDXGISwapChain* s,UINT interval,UINT flags) {
     // The composed play window has its own explicit frame pacing. Do not also
     // serialize it to the legacy engine's swap interval. Preserve test calls.
     auto result=reinterpret_cast<decltype(&present)>(oldSwap[8])(s,fixture||(flags&DXGI_PRESENT_TEST)?interval:0,flags);
+    lastPresentHresult=static_cast<uint32_t>(result);
+    if(result==DXGI_STATUS_OCCLUDED)++presentOccluded;
+    if(flags&DXGI_PRESENT_TEST)++presentTests;
+    else if(result==S_OK)++presentOk;
 #ifdef OWMC_LIVE_BLEND
     if(!fixture&&!(flags&DXGI_PRESENT_TEST))providedDebugUi.sample(lightRead);
 #endif
@@ -664,6 +670,8 @@ void report(const std::filesystem::path& dir) {
 #endif
     auto file=dir/(prefix+std::to_string(GetCurrentProcessId())+".json"),temp=file;temp+=L".tmp";
     std::ofstream out(temp);out<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":"<<OWMC_LIVE_VERSION<<",\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")<<",\"frames\":"<<frames<<",\"poses\":"<<poses<<",\"failures\":"<<failures;
+    out<<",\"presentOk\":"<<presentOk<<",\"presentOccluded\":"<<presentOccluded<<",\"presentTests\":"<<presentTests
+       <<",\"lastPresentHresult\":"<<lastPresentHresult;
     auto error=std::atomic_load(&failureMessage);if(error)out<<",\"failureMessage\":"<<std::quoted(*error);
     auto pose=std::atomic_load(&latestPose);if(pose) {out<<",\"generation\":"<<pose->generation<<",\"lastFrame\":"<<pose->frame<<",\"fov\":"<<pose->fov<<",\"basis\":[";for(int i=0;i<9;i++) {if(i) out<<',';out<<pose->basis[i];}out<<']';}
 #ifdef OWMC_LIVE_BLEND

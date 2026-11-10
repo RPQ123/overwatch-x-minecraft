@@ -12,6 +12,8 @@ import time
 
 import psutil
 from minecraft_crash_evidence import detect, snapshot, PROFILES
+from modpack.config import paths
+from process_images import game_processes
 
 ROOT = Path(__file__).resolve().parents[1]
 PYTHON = ROOT / '.venv/Scripts/python.exe'
@@ -20,30 +22,8 @@ NATIVE = ROOT / 'overwatch-2015/Overwatch Beta 0.8.0.24919/GameClientApp.patched
 
 def project_processes():
     """Exact paths/--gameDir, including javaw; unrelated Java is not a blocker."""
-    result = []
-    profiles = {ROOT / name for name in PROFILES}
-    for process in psutil.process_iter(['pid', 'name', 'exe', 'cmdline']):
-        try:
-            info = process.info
-            executable = info.get('exe')
-            if not executable:
-                if (info.get('name') or '').lower() in ('java.exe', 'javaw.exe', NATIVE.name.lower()):
-                    raise RuntimeError('游戏进程身份不可读；无法确认关闭，未继续构建或启动')
-                continue
-            path = Path(executable).resolve()
-            match = path == NATIVE.resolve()
-            arguments = info.get('cmdline') or []
-            if path.name.lower() in ('java.exe', 'javaw.exe') and info.get('cmdline') is None:
-                raise RuntimeError('JVM命令行不可读；无法确认私有档案身份')
-            if path.name.lower() in ('java.exe', 'javaw.exe') and '--gameDir' in arguments:
-                index = arguments.index('--gameDir')
-                if index + 1 < len(arguments):
-                    match = Path(arguments[index + 1]).resolve() in profiles
-            if match:
-                result.append(dict(pid=process.pid, created=process.create_time(), executable=str(path)))
-        except psutil.NoSuchProcess:
-            continue
-    return result
+    processes = game_processes(native=NATIVE, profiles=(ROOT/name for name in PROFILES), java=paths().get('java'))
+    return [dict(pid=process.pid, created=process.create_time(), executable=process.exe()) for process in processes]
 
 
 def check_crash(state, output):

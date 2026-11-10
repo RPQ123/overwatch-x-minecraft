@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import tempfile
 import time
+from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
@@ -52,6 +53,7 @@ class GateTests(unittest.TestCase):
             (health(), report(1500, 4, lastMcGeneration=9), 1500),
             (health(hostGeneration=9), report(1500, 4), 1500),
             (health(), report(1500, 4, colorUploads=10), 1500),
+            (health(), report(1500, 4, presentOk=0, presentOccluded=4), 1500),
             (health(sourcePid=99), report(1500, 4), 1500),
             (health(), report(1500, 4, viewMode=0), 1500),
             (health(), report(1500, 4), 3100),
@@ -85,7 +87,7 @@ class GateTests(unittest.TestCase):
             ticket = cover.LoadingTicket.create(root, REQUEST, time.perf_counter_ns()+20*10**9)
             self.assertEqual(ticket.state(), 'pending')
             with patch.object(cover.time, 'perf_counter_ns', return_value=ticket.deadline_ns):
-                with self.assertRaisesRegex(cover.LoadingCancelled, '180'):
+                with self.assertRaisesRegex(cover.LoadingCancelled, str(cover.LOAD_SECONDS)):
                     ticket.checkpoint()
             ticket.finish('cancelled')
             self.assertEqual(ticket.state(), 'cancelled')
@@ -94,20 +96,20 @@ class GateTests(unittest.TestCase):
 
 
 class WindowFixtures(unittest.TestCase):
-    def test_negative_virtual_monitor_origin_is_passed_to_win32(self):
-        user = Mock()
-        user.GetAncestor.side_effect = [10, 11]
-        user.MonitorFromWindow.return_value = 12
-        user.GetSystemMetrics.side_effect = [-1920, -240, 4480, 1680]
-        def info(_, output):
-            rect = output._obj.monitor
-            rect.left, rect.top, rect.right, rect.bottom = 0, 0, 2560, 1440
-            return True
-        user.GetMonitorInfoW.side_effect = info
-        with patch.object(layout, 'user32', user):
-            self.assertEqual(screen.place_cover(Mock(), Mock()), (1920, 240, 4480, 1680))
-        self.assertEqual(user.SetWindowPos.call_args.args[2:6], (-1920, -240, 4480, 1680))
-        self.assertEqual(user.SetWindowPos.call_args.args[1].value, layout.wintypes.HWND(-1).value)
+    def test_progress_does_not_set_dwm_alpha_topmost_or_desktop_geometry(self):
+        for build, dpi, origin in ((19045,120,(-1920,-240)), (22631,144,(-2560,0))):
+            with self.subTest(build=build,dpi=dpi,origin=origin), \
+                 patch.object(screen.tk,'Toplevel') as top, patch.object(screen.tk,'Label'), \
+                 patch.object(screen.tk,'Button'), patch.object(screen.ttk,'Progressbar') as bar:
+                owner=Mock(winfo_rootx=Mock(return_value=origin[0]),winfo_rooty=Mock(return_value=origin[1]))
+                progress=screen.LoadingScreen(owner,Mock())
+                progress.update(2,5,'正在连接画面')
+                bar.return_value.configure.assert_called_once_with(maximum=5,value=2)
+                for name in ('attributes','geometry','overrideredirect','grab_set'):
+                    getattr(top.return_value,name).assert_not_called()
+                owner.winfo_rootx.assert_not_called()
+                progress.close()
+                top.return_value.destroy.assert_called_once()
 
     def test_exact_pair_stacks_without_hide_minimize_or_resize(self):
         pair = (layout.Window(19,14,1920,1080,'OW'), layout.Window(20,15,960,540,'MC'))
@@ -123,30 +125,14 @@ class WindowFixtures(unittest.TestCase):
         self.assertEqual(user.SetWindowPos.call_args.args, (20,19,0,0,0,0,flags))
         user.ShowWindow.assert_not_called()
 
-    def test_fade_finishes_and_destroys_only_its_own_topmost_window(self):
-        view = object.__new__(screen.LoadingScreen)
-        view.window = Mock()
-        view.fading = view.closed = False
-        pending = []
-        view.window.after.side_effect = lambda _, callback: pending.append(callback)
-        view.fade(view.close)
-        for _ in range(6):
-            pending.pop(0)()
-        self.assertTrue(view.closed)
-        self.assertEqual(view.window.attributes.call_count, 6)
-        view.window.destroy.assert_called_once()
-
-
 class HandOffFixtures(unittest.TestCase):
     def ui(self):
         ui = object.__new__(launcher.LauncherUI)
-        ui.loading = Mock(fading=False, input_held=Mock(return_value=False))
+        ui.loading = Mock()
         ui.loading_ticket = Mock(request_id=REQUEST)
         ui.loading_error = None
         ui.loading_log = Path('action.log')
         ui.loading_step = '正在连接画面'
-        ui.loading_focus_needed = False
-        ui.loading_input_held = False
         ui.window = Mock()
         ui.backend = Mock()
         ui.action_var = Mock()
@@ -163,33 +149,76 @@ class HandOffFixtures(unittest.TestCase):
         view.close.assert_called_once()
         ui.window.attributes.assert_called_once_with('-topmost', False)
         self.assertEqual(error.call_args.args[1], '正在连接画面')
-        self.assertIn('180', error.call_args.args[2])
+        self.assertIn(str(cover.LOAD_SECONDS), error.call_args.args[2])
         self.assertEqual(error.call_args.args[-2:], (ui.retry_loading, ui.close))
 
-    def test_focus_refusal_preserves_cover_then_successful_fade_releases(self):
+    def test_focus_refusal_releases_and_allows_manual_focus(self):
         ui = self.ui()
         ticket, view = ui.loading_ticket, ui.loading
-        ui.backend.focus_loading_pair.side_effect = [False, True, True]
-        ui.try_loading_focus()
-        self.assertTrue(ui.loading_focus_needed)
-        view.fade.assert_not_called()
-        ui.try_loading_focus()
-        view.fade.call_args.args[0]()
-        self.assertTrue(ui.backend.focus_loading_pair.call_args.kwargs['foreground_only'])
+        ui.backend.focus_loading_pair.return_value = False
+        with patch.object(screen.LoadingScreen,'input_held',return_value=False):
+            ui.try_loading_focus()
+        ui.action_var.set.assert_called_once_with('游戏窗口已打开，请单击 OW 窗口进入。')
         ticket.finish.assert_called_once_with('released')
         view.close.assert_called_once()
         self.assertIsNone(ui.loading)
 
-    def test_held_input_during_fade_keeps_cover_and_ticket_active(self):
+    def test_held_input_avoids_forcing_game_focus(self):
         ui = self.ui()
-        ticket, view = ui.loading_ticket, ui.loading
-        ui.backend.focus_loading_pair.return_value = True
-        view.input_held.side_effect = [False, True]
-        ui.try_loading_focus()
-        view.fade.call_args.args[0]()
-        view.restore_opacity.assert_called_once()
-        ticket.finish.assert_not_called()
-        self.assertTrue(ui.loading_input_held)
+        ticket=ui.loading_ticket
+        with patch.object(screen.LoadingScreen,'input_held',return_value=True):
+            ui.try_loading_focus()
+        ui.backend.focus_loading_pair.assert_not_called()
+        ticket.finish.assert_called_once_with('released')
+
+    def test_stalled_present_offers_window_without_claiming_composition(self):
+        ticket=Mock(request_id=REQUEST,state=Mock(return_value='pending'))
+        timeline=Mock()
+        status={}
+        native=Mock(pid=14,create_time=Mock(return_value=1.0))
+        guest=Mock(pid=15,create_time=Mock(return_value=2.0))
+        with patch.object(session.psutil,'Process',side_effect=[native,guest]), \
+             patch('window_layout.guest_window_owner',return_value=guest), \
+             patch('window_layout.render_pair',return_value=(SimpleNamespace(handle=19),SimpleNamespace(handle=20))), \
+             patch.object(session.time,'monotonic',return_value=100) as clock, \
+             patch.object(session.time,'time',return_value=1.5), \
+             patch.object(session,'stage_ready',return_value=True), patch.object(session,'write_status'), \
+             patch.object(session,'api',return_value=health()), \
+             patch.object(session,'read_report',return_value=report(1500,presentOk=0,presentOccluded=5,poses=0)), \
+             patch.object(session,'WINDOW_REVEALS',set()), patch.object(session,'wait') as wait:
+            def observe(_, advance, *args, **kwargs):
+                self.assertIsNone(advance())
+                clock.return_value=116
+                self.assertIsNone(advance())
+                self.assertIs(status['startupPresentation']['frameVerified'],False)
+                ticket.state.return_value='released'
+                self.assertTrue(advance())
+            wait.side_effect=observe
+            session.await_loading_handoff(14,health(),ticket,status,timeline)
+        self.assertEqual(timeline.mark.call_args_list[0].args,('loading_presentation_skipped',))
+        self.assertEqual(timeline.mark.call_args_list[0].kwargs['report']['presentOccluded'],5)
+        self.assertNotIn('startupPresentation',status)
+
+    def test_collision_and_localized_errors(self):
+        sock=Mock()
+        sock.__enter__=Mock(return_value=sock)
+        sock.__exit__=Mock()
+        with patch.object(session.socket,'socket',return_value=sock):
+            sock.connect_ex.return_value=10061
+            session.require_bridge_port()
+            sock.connect_ex.return_value=0
+            with self.assertRaisesRegex(RuntimeError,'32133 已被占用'):
+                session.require_bridge_port()
+        for text, expected in (
+            ('No completed observation; do not reload. Three-frame stop needs active presents.','OW 未能'),
+            ('[WinError 5] Access is denied','本地可写'),
+            ('[WinError 126] Missing module','VC++'),
+            ('DXGI_ERROR_DEVICE_REMOVED','显卡'),
+            ('Waiting for the real saved Minecraft world: fixture','Minecraft'),
+            ('some internal traceback','游戏启动未完成'),
+        ):
+            with self.subTest(text=text):
+                self.assertIn(expected,cover.startup_failure_text(text))
 
     def test_failed_timeline_releases_overlay_before_reporting_error(self):
         ui = self.ui()
@@ -201,7 +230,7 @@ class HandOffFixtures(unittest.TestCase):
         with patch.object(screen, 'show_loading_error') as error:
             error.side_effect = lambda *args: view.close.assert_called_once()
             ui.update_loading()
-        self.assertIn('fixture launch failed', error.call_args.args[2])
+        self.assertIn('游戏启动未完成', error.call_args.args[2])
 
     def test_coordinator_joins_cancelled_supervisor_before_normal_cleanup(self):
         with tempfile.TemporaryDirectory() as name:
@@ -229,22 +258,20 @@ class HandOffFixtures(unittest.TestCase):
         ticket.state.side_effect = ['pending','pending','pending','released']
         captured = []
         def wait(_, advance, *args, **kwargs):
-            if kwargs.get('loading'):
-                return advance()
             for _ in range(3):
                 self.assertIsNone(advance())
             self.assertEqual(len(captured), 1)
             return advance()
         pair = (layout.Window(19,14,1920,1080,'OW'), layout.Window(20,15,960,540,'MC'))
         with patch.object(layout,'guest_window_owner',return_value=guest), patch.object(layout,'render_pair',return_value=pair), \
-             patch.object(session.psutil,'Process',return_value=native), patch.object(session,'wait',side_effect=wait), \
+             patch.object(session.psutil,'Process',side_effect=[native,guest]), patch.object(session,'wait',side_effect=wait), \
              patch.object(session,'paths'), patch.object(session,'stage_ready',return_value=True), \
              patch.object(session,'read_report',side_effect=[report(900),report(1100,4),report(1600,8)]), \
-             patch.object(session,'api',return_value=health()), patch.object(session.time,'time',side_effect=[1.,1.,1.1,1.6]), \
+             patch.object(session,'api',return_value=health()), patch.object(session.time,'time',side_effect=[1.,1.,1.1,1.6,1.6]), \
              patch.object(session,'write_status',side_effect=lambda value: captured.append(json.loads(json.dumps(value)))), \
              patch.object(session,'WINDOW_REVEALS',set()):
             record = {}
-            session.await_loading_handoff(14,health(),{},ticket,record,timeline)
+            session.await_loading_handoff(14,health(),ticket,record,timeline)
         self.assertEqual(captured[0]['startupPresentation']['lastMcFrame'], 58)
         self.assertNotIn('startupPresentation', record)
         timeline.mark.assert_any_call('loading_handoff')
