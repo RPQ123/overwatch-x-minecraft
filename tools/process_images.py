@@ -49,12 +49,16 @@ def native_image(name, target):
 JAVA_IMAGES = {'java.exe', 'javaw.exe'}
 
 
+def game_images():
+    try:
+        return process_images()
+    except OSError as failure:
+        raise RuntimeError('Windows 未能列出进程，暂时无法确认游戏是否已退出。请正常关闭游戏后重试。') from failure
+
+
 def game_processes(*, native=None, profiles=(), java=None):
     """Match exact paths or --gameDir. Keep unverified OW candidates separate from foreign software."""
-    try:
-        images = process_images()
-    except OSError as failure:
-        raise RuntimeError('Windows 未能列出进程，暂时无法确认游戏是否已退出。请关闭游戏后重试。') from failure
+    images = game_images()
     profiles = {profile.resolve() for profile in profiles}
     native = native.resolve() if native is not None else None
     owned_java = {java.resolve(), java.with_name('javaw.exe').resolve()} if java is not None else set()

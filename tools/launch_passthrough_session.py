@@ -603,9 +603,10 @@ def launch_native(settings,map_id,timeline=None,*,guest=None,loading=None,isolat
         def ready_visible():
             if loading and not native_identity.is_running():
                 raise RuntimeError(f'OW 在场景就绪前已退出（0x{(child.poll() or 0) & 0xffffffff:08X}）。')
-            try:reveal_native_render(pid,native_created,native=native_identity)
+            try:visible=reveal_native_render(pid,native_created,native=native_identity)
             except OSError:
-                pass  # The original can finish loading while its window is being created.
+                visible=False  # The original can finish loading while its window is being created.
+            if visible and loading and timeline:timeline.mark('loading_native_window_visible')
             return cold_ready(pid,timeline)
         wait('Waiting for the supplied original client/plugin',ready_visible,180 if loading else 150,loading=loading)
     if timeline:timeline.mark('native_client_ready',pid=pid)

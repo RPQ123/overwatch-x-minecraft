@@ -100,9 +100,10 @@ class WindowFixtures(unittest.TestCase):
         for build, dpi, origin in ((19045,120,(-1920,-240)), (22631,144,(-2560,0))):
             with self.subTest(build=build,dpi=dpi,origin=origin), \
                  patch.object(screen.tk,'Toplevel') as top, patch.object(screen.tk,'Label'), \
-                 patch.object(screen.tk,'Button'), patch.object(screen.ttk,'Progressbar') as bar:
+                 patch.object(screen.tk,'Button'), patch.object(screen.tk,'Frame'), \
+                 patch.object(screen.ttk,'Progressbar') as bar:
                 owner=Mock(winfo_rootx=Mock(return_value=origin[0]),winfo_rooty=Mock(return_value=origin[1]))
-                progress=screen.LoadingScreen(owner,Mock())
+                progress=screen.LoadingScreen(owner,Mock(),fullscreen=False)
                 progress.update(2,5,'正在连接画面')
                 bar.return_value.configure.assert_called_once_with(maximum=5,value=2)
                 for name in ('attributes','geometry','overrideredirect','grab_set'):
@@ -110,6 +111,26 @@ class WindowFixtures(unittest.TestCase):
                 owner.winfo_rootx.assert_not_called()
                 progress.close()
                 top.return_value.destroy.assert_called_once()
+
+    def test_full_cover_spans_negative_origin_and_centers_on_owner_monitor(self):
+        user=Mock()
+        user.GetAncestor.side_effect=[10,11]
+        user.GetSystemMetrics.side_effect=[-1920,-240,4480,1680]
+        def monitor(_, output):
+            rect=output._obj.monitor
+            rect.left,rect.top,rect.right,rect.bottom=0,0,2560,1440
+            return True
+        def placed(_, output):
+            rect=output._obj
+            rect.left,rect.top,rect.right,rect.bottom=-1920,-240,2560,1440
+            return True
+        user.GetMonitorInfoW.side_effect=monitor
+        def read(handle, output):
+            return True if user.GetWindowRect.call_count==1 else placed(handle,output)
+        user.GetWindowRect.side_effect=read
+        with patch.object(layout,'user32',user):
+            self.assertEqual(screen.place_cover(Mock(),Mock()),(3200,960))
+        self.assertEqual(user.SetWindowPos.call_args.args[2:6],(-1920,-240,4480,1680))
 
     def test_exact_pair_stacks_without_hide_minimize_or_resize(self):
         pair = (layout.Window(19,14,1920,1080,'OW'), layout.Window(20,15,960,540,'MC'))
@@ -129,9 +150,12 @@ class HandOffFixtures(unittest.TestCase):
     def ui(self):
         ui = object.__new__(launcher.LauncherUI)
         ui.loading = Mock()
+        ui.loading_watch = None
         ui.loading_ticket = Mock(request_id=REQUEST)
         ui.loading_error = None
         ui.loading_log = Path('action.log')
+        ui.loading_deadline_ns = time.perf_counter_ns()+360*10**9
+        ui.startup_result = {'ready': True}
         ui.loading_step = '正在连接画面'
         ui.window = Mock()
         ui.backend = Mock()
@@ -155,13 +179,94 @@ class HandOffFixtures(unittest.TestCase):
     def test_focus_refusal_releases_and_allows_manual_focus(self):
         ui = self.ui()
         ticket, view = ui.loading_ticket, ui.loading
-        ui.backend.focus_loading_pair.return_value = False
+        def refused(*args):
+            view.close.assert_called_once()
+            return False
+        ui.backend.focus_loading_pair.side_effect = refused
         with patch.object(screen.LoadingScreen,'input_held',return_value=False):
             ui.try_loading_focus()
         ui.action_var.set.assert_called_once_with('游戏窗口已打开，请单击 OW 窗口进入。')
         ticket.finish.assert_called_once_with('released')
         view.close.assert_called_once()
         self.assertIsNone(ui.loading)
+
+    def test_win11_cover_yields_once_then_handoff_succeeds(self):
+        second=10**9
+        for occluded in (0,1):
+            with self.subTest(occluded=occluded):
+                ui=self.ui()
+                full,ticket=ui.loading,ui.loading_ticket
+                ui.loading_watch=cover.CoverWatchdog(0)
+                ui.last_snapshot=dict(status={'phase':'starting'},loadingTimeline=dict(request={'requestId':REQUEST},
+                    events=[dict(name='compositor_attach_started',monotonicNs=0)]))
+                def update(ns,count,blocked=0):
+                    ui.last_snapshot.update(snapshotNs=ns,loadingCoverReport=dict(enabled=True,presentOk=count,presentOccluded=blocked))
+                    with patch.object(launcher.time,'perf_counter_ns',return_value=ns):ui.update_loading()
+                with patch.object(screen,'LoadingScreen') as make, patch('launcher_ui_owner.log') as log:
+                    update(second,0)
+                    full.close.assert_not_called()
+                    update(2*second if occluded else 4*second,0,occluded)
+                    full.close.assert_called_once()
+                    self.assertEqual(make.call_args.kwargs,{'fullscreen':False})
+                    self.assertIn('遮挡' if occluded else '停滞',log.call_args.kwargs['reason'])
+                    ticket.finish.assert_not_called()
+                    update(5*second,18)
+                    make.assert_called_once()
+                    ui.last_snapshot=snapshot(round(time.time()*1000))
+                    ui.try_loading_focus()
+                    ticket.finish.assert_called_once_with('released')
+                    make.return_value.close.assert_called_once()
+
+    def test_win10_advancing_present_keeps_cover_until_verified_handoff(self):
+        ui=self.ui()
+        full,ticket=ui.loading,ui.loading_ticket
+        ui.loading_watch=cover.CoverWatchdog(0)
+        timeline=dict(request={'requestId':REQUEST},events=[dict(name='compositor_attach_started',monotonicNs=0)])
+        for sec in range(1,8):
+            now=sec*10**9
+            ui.last_snapshot=dict(status={'phase':'starting'},loadingTimeline=timeline,snapshotNs=now,
+                                  loadingCoverReport=dict(enabled=True,presentOk=sec*60,presentOccluded=0))
+            with patch.object(launcher.time,'perf_counter_ns',return_value=now):ui.update_loading()
+        full.close.assert_not_called()
+        ticket.finish.assert_not_called()
+        ui.last_snapshot=snapshot(round(time.time()*1000))
+        with patch.object(screen.LoadingScreen,'input_held',return_value=False):ui.try_loading_focus()
+        full.close.assert_called_once()
+        ticket.finish.assert_called_once_with('released')
+
+    def test_pre_compositor_wait_and_stale_snapshot_cannot_keep_cover(self):
+        watch=cover.CoverWatchdog(0)
+        timeline=dict(events=[dict(name='native_bootstrap_started',monotonicNs=0)])
+        self.assertIsNone(watch.reason(timeline,{},2*10**9,2*10**9))
+        self.assertIn('引导',watch.reason(timeline,{},3*10**9,3*10**9))
+        self.assertIn('状态',watch.reason(timeline,{},None,6*10**9))
+
+    def test_cover_geometry_error_is_cosmetic_and_does_not_cancel_ticket(self):
+        ui=self.ui()
+        ui.last_snapshot={}
+        ui.loading_watch=cover.CoverWatchdog(time.perf_counter_ns())
+        full,ticket=ui.loading,ui.loading_ticket
+        full.update.side_effect=OSError('DPI changed')
+        with patch.object(screen,'LoadingScreen') as make, patch('launcher_ui_owner.log') as log:
+            ui.update_loading()
+            full.close.assert_called_once()
+            self.assertEqual(make.call_args.kwargs,{'fullscreen':False})
+            self.assertIn('无法更新',log.call_args.kwargs['reason'])
+            ticket.finish.assert_not_called()
+            ui.close()
+            ticket.finish.assert_called_once_with('cancelled')
+
+    def test_display_presence_and_snapshot_errors_reach_chinese_failure_dialog(self):
+        import native_display_mode as display
+        for listing, phrase in (([(7,'gameclientapp.exe')],'仍在运行'),(OSError('snapshot failed'),'无法确认')):
+            ui=self.ui()
+            with patch('process_images.process_images',side_effect=[listing]), \
+                 patch.object(screen,'show_loading_error') as dialog:
+                try:display.verified_launch()
+                except (RuntimeError,ValueError) as failure:ui.fail_loading(str(failure))
+                else:self.fail('display lease unexpectedly admitted')
+                self.assertIn(phrase,dialog.call_args.args[2])
+                self.assertIn('正常',dialog.call_args.args[2])
 
     def test_held_input_avoids_forcing_game_focus(self):
         ui = self.ui()

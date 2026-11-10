@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import os
 from pathlib import Path
 import re
 import time
@@ -13,6 +15,7 @@ from modpack.config import local_path, read_json, write_json
 LOAD_SECONDS = 360
 FRAME_MAX_AGE_MS = 1500
 START_ACTIONS = ('start', 'toggle', 'reboot', 'restart')
+COVER_STALL_NS = 3_000_000_000
 
 
 class LoadingCancelled(RuntimeError):
@@ -150,6 +153,86 @@ def startup_failure_text(detail):
 def matching_timeline(snapshot, request_id):
     timeline = snapshot.get('loadingTimeline') or {}
     return timeline if (timeline.get('request') or {}).get('requestId') == request_id else {}
+
+
+def loading_render_samples(build, timeline):
+    """Read the current launch's existing native reports on the snapshot worker."""
+    events = {row['name']: row for row in timeline.get('events', ())}
+    spawn = events.get('native_spawned', {})
+    pid, created = spawn.get('pid'), spawn.get('creation')
+    if type(pid) is not int or pid <= 0 or not isinstance(created, (float, int)):
+        return {}
+    if 'compositor_attach_started' in events:
+        from native_compositor_version import VERSION as version
+        prefix = 'world-live'
+    elif 'native_bootstrap_started' in events and 'native_bootstrap_finished' not in events:
+        from native_bootstrap_maps import VERSION as version
+        prefix = 'session-bootstrap'
+    else:
+        return {}
+    try:
+        with (build/f'{prefix}-{pid}.json').open('rb') as stream:
+            if os.fstat(stream.fileno()).st_mtime_ns < int(created*1e9):
+                return {}
+            report = json.loads(stream.read(256*1024))
+        if (report.get('pid') == pid and report.get('probeVersion') == version and report.get('failures') == 0):
+            return report
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass  # Missing, locked or malformed telemetry cannot keep the cover indefinitely.
+    return {}
+
+
+class CoverWatchdog:
+    """Release only the cosmetic cover. All startup deadlines and owners stay intact."""
+
+    def __init__(self, now_ns):
+        self.snapshot_ns = now_ns
+        self.progress_ns = now_ns
+        self.signal = None
+
+    def reason(self, timeline, report, snapshot_ns, now_ns):
+        if type(snapshot_ns) is int and snapshot_ns <= now_ns:
+            self.snapshot_ns = max(self.snapshot_ns, snapshot_ns)
+        if now_ns - self.snapshot_ns >= COVER_STALL_NS:
+            return '启动状态暂未更新'
+
+        events = {row['name']: row['monotonicNs'] for row in timeline.get('events', ())}
+        if 'compositor_attach_started' in events:
+            count, occluded = report.get('presentOk'), report.get('presentOccluded')
+            if report.get('enabled') is True and type(count) is int and count >= 0 and type(occluded) is int:
+                if occluded > 0:
+                    return f'OW 报告遮挡（presentOccluded={occluded}）'
+                if not self.signal or self.signal[0] != 'present' or count > self.signal[1]:
+                    self.signal, self.progress_ns = ('present', count), now_ns
+            if self.signal and self.signal[0] == 'present':
+                if now_ns - self.progress_ns >= COVER_STALL_NS:
+                    return f'OW 成功 Present 停滞（presentOk={self.signal[1]}）'
+            elif now_ns - events['compositor_attach_started'] >= 2*COVER_STALL_NS:
+                return '暂未取得 OW 合成器出画计数'
+            observers = events.get('native_observers_ready')
+            if observers is not None and 'loading_presentation_ready' not in events and now_ns - observers >= COVER_STALL_NS:
+                return '合成帧尚未连通'
+        elif 'native_bootstrap_started' in events and 'native_bootstrap_finished' not in events:
+            phase = report.get('phase')
+            if phase not in (0, 1, 2, 3):
+                phase = self.signal[1] if self.signal and self.signal[0] == 'bootstrap' else 0
+            if self.signal != ('bootstrap', phase):
+                self.signal = ('bootstrap', phase)
+                self.progress_ns = now_ns if phase else events['native_bootstrap_started']
+            # The original engine deliberately waits 3s before requesting the backing map.
+            if phase != 3 and now_ns - self.progress_ns >= (2 if phase in (1, 2) else 1)*COVER_STALL_NS:
+                return f'OW 原版场景引导暂未推进（阶段 {phase}）'
+        else:
+            for start, end, grace in (
+                ('loading_native_window_visible', 'native_client_ready', 2),
+                ('native_hero_spawn_started', 'native_hero_spawn_complete', 1),
+                ('native_weapon_graph_wait_started', 'native_weapon_graph_ready', 1),
+            ):
+                if start in events and end not in events and now_ns - events[start] >= grace*COVER_STALL_NS:
+                    return 'OW 启动阶段暂未推进'
+            if ('native_spawned' in events or 'mc_jvm_spawned' in events) and now_ns - max(events.values()) >= 4*COVER_STALL_NS:
+                return '游戏加载进度暂未更新'
+        return None
 
 
 def presentation_receipt(snapshot, request_id, now_ms):

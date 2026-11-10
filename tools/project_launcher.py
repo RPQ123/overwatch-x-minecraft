@@ -27,7 +27,7 @@ import psutil
 
 from modpack.config import PackPaths, OW_RELATIVE, OW_SHA256
 from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress, milestones,
-                           matching_timeline, presentation_receipt, startup_failure_text)
+                           CoverWatchdog, loading_render_samples, matching_timeline, presentation_receipt, startup_failure_text)
 
 ROOT = Path(__file__).resolve().parents[1]
 EXE_RELATIVE = Path(OW_RELATIVE)
@@ -493,11 +493,13 @@ class SessionBackend:
             resource_warnings=resources.get('warnings',[]) if resources.get('profile')==str(self.paths.get('profile')) else []
         except (OSError,ValueError):
             resource_warnings=[]
+        timeline = self.loading_timeline(action.get('requestId', '')) if action.get('loading') else {}
         return {'status': status, 'settings': settings, 'nativeAlive': native is not None,
                 'supervisorPids': [p.pid for p in supervisors], 'fresh': fresh, 'projectPids': project,
                 'action': action, 'actionActive': self.action_active(action),
                 'recentLog': self.recent_log(action), 'errors': errors, 'resourceWarnings': resource_warnings,
-                'loadingTimeline': self.loading_timeline(action.get('requestId', '')) if action.get('loading') else {}}
+                'loadingTimeline': timeline, 'snapshotNs': time.perf_counter_ns(),
+                'loadingCoverReport': loading_render_samples(self.root/'native-host/build', timeline)}
 
 
 def execute_action(backend: SessionBackend, action: str, log: Path, world_name: str = '') -> dict:
@@ -730,6 +732,7 @@ class LauncherUI:
         self.pending_log: Path | None = None
         self.pending_action = ''
         self.loading = None
+        self.loading_watch = None
         self.loading_ticket = None
         self.loading_error = None
         self.loading_retry = None
@@ -970,35 +973,60 @@ class LauncherUI:
         self.loading_step = '正在检查本地文件'
         self.loading_log = self.backend.logs/'loading-preflight.log'
         try:
-            self.loading = LoadingScreen(self.window, lambda: self.fail_loading('启动已取消。'))
+            self.loading = LoadingScreen(self.window, lambda: self.fail_loading('启动已取消。'),
+                                         logo=self.backend.root/'assets/launcher/owmc.png')
+            self.loading_watch = CoverWatchdog(time.perf_counter_ns())
         except Exception as failure:
-            print(f'进度窗口未能打开，启动仍会继续：{failure}', flush=True)
+            self.yield_loading_cover(f'全屏加载不可用：{failure}')
         return True
+
+    def close_loading_view(self):
+        view, self.loading = self.loading, None
+        self.loading_watch = None
+        if view:
+            view.close()
+
+    def yield_loading_cover(self, reason):
+        from launcher_loading_screen import LoadingScreen
+        from launcher_ui_owner import log
+        self.close_loading_view()
+        try:
+            log(self.backend.root, 'loading-cover-yielded', reason=reason,
+                requestId=self.loading_ticket.request_id if self.loading_ticket else None)
+        except (OSError, ValueError):
+            pass
+        try:
+            self.loading = LoadingScreen(self.window, lambda: self.fail_loading('启动已取消。'), fullscreen=False)
+            self.window.attributes('-topmost', False)
+            self.window.lower()
+            self.loading.window.lower()
+        except Exception as failure:
+            self.close_loading_view()
+            print(f'进度窗口不可用，启动继续：{failure}', flush=True)
+
+    def focus_loading_view(self):
+        try:
+            self.loading.take_focus()
+        except Exception as failure:
+            self.yield_loading_cover(f'加载窗无法接收焦点：{failure}')
 
     def begin_auto_loading(self):
         if self.auto_start_pending and self.page == 'main':
             self.open_loading('start')
 
     def end_loading(self, decision=None):
-        cover, ticket = self.loading, self.loading_ticket
-        self.loading = self.loading_ticket = None
-        try:
-            if ticket and decision:
-                try:
-                    if decision == 'released' and cover:
-                        cover.close()
-                        cover = None
-                    ticket.finish(decision)
-                except (OSError, RuntimeError):
-                    if decision == 'released':
-                        try:
-                            ticket.finish('cancelled')
-                        except OSError:
-                            pass
-                    raise
-        finally:
-            if cover:
-                cover.close()
+        ticket, self.loading_ticket = self.loading_ticket, None
+        self.close_loading_view()
+        if ticket and decision:
+            try:
+                ticket.finish(decision)
+            except (OSError, RuntimeError):
+                if decision == 'released':
+                    try:
+                        ticket.finish('cancelled')
+                    except OSError:
+                        pass
+                raise
 
     def fail_loading(self, detail):
         from launcher_loading_screen import show_loading_error
@@ -1038,6 +1066,7 @@ class LauncherUI:
         except RuntimeError as failure:
             self.fail_loading(str(failure))
             return
+        self.close_loading_view()  # Remove the cover before any cross-process window activation.
         focused = False
         try:
             from launcher_loading_screen import LoadingScreen
@@ -1055,7 +1084,8 @@ class LauncherUI:
     def update_loading(self):
         if not self.loading and not self.loading_ticket:
             return
-        if time.perf_counter_ns() >= self.loading_deadline_ns:
+        now_ns = time.perf_counter_ns()
+        if now_ns >= self.loading_deadline_ns:
             self.fail_loading(f'启动等待超过 {LOAD_SECONDS} 秒。')
             return
         ticket = self.loading_ticket
@@ -1080,11 +1110,19 @@ class LauncherUI:
             self.loading_step = '正在等待新的合成帧'
         if self.loading:
             try:
-                self.loading.update(done, total, self.loading_step)
+                if self.loading_watch:
+                    reason = self.loading_watch.reason(timeline, self.last_snapshot.get('loadingCoverReport') or {},
+                                                       self.last_snapshot.get('snapshotNs'), now_ns)
+                    if reason:
+                        self.yield_loading_cover(reason)
+                if self.loading:
+                    self.loading.update(done, total, self.loading_step)
             except Exception as failure:
-                print(f'进度显示暂不可用，启动仍会继续：{failure}', flush=True)
-                self.loading.close()
-                self.loading = None
+                if self.loading_watch:
+                    self.yield_loading_cover(f'加载遮罩无法更新：{failure}')
+                else:
+                    self.close_loading_view()
+                    print(f'进度显示暂不可用，启动仍会继续：{failure}', flush=True)
         self.try_loading_focus()
 
     def toggle_auto_start(self) -> None:
@@ -1272,8 +1310,8 @@ class LauncherUI:
                 self._animate(busy)
         except Exception as failure:
             traceback.print_exc()
-            if self.loading:
-                self.fail_loading(str(failure))
+            if self.loading_watch:
+                self.yield_loading_cover(f'界面更新异常：{failure}')
         if not self.polling:
             self.polling = True
             threading.Thread(target=self._read_snapshot, daemon=True).start()
@@ -1293,7 +1331,7 @@ class LauncherUI:
     def close(self) -> None:
         self.closed = True
         try:
-            if getattr(self, 'loading', None):
+            if getattr(self, 'loading', None) or getattr(self, 'loading_ticket', None):
                 self.end_loading('cancelled')
         finally:
             self.window.destroy()
@@ -1693,7 +1731,7 @@ def main() -> int:
             ui.begin_auto_loading()
         show_launcher_window(window)
         if ui is not None and ui.loading:
-            ui.loading.take_focus()
+            ui.focus_loading_view()
         owner.watch(window, ui)
         window.after_idle(lambda: notify_ready(ROOT))
         try:

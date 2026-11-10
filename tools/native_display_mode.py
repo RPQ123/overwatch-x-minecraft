@@ -220,13 +220,13 @@ def verified_native(pid):
 
 
 def any_native_running():
-    from process_images import native_image, process_images
+    from process_images import game_images, native_image
     # A name alone can prevent a desktop mode change, never authorize one.
-    return any(native_image(name, EXE) for _, name in process_images())
+    return any(native_image(name, EXE) for _, name in game_images())
 
 
 def verified_launch():
-    if any_native_running():raise ValueError('Fullscreen mode must be prepared before native startup')
+    if any_native_running():raise ValueError('检测到守望先锋仍在运行，请先正常退出后再开始游戏。')
     if hashlib.sha256(EXE.read_bytes()).hexdigest()!=PATCHED_SHA256:
         raise ValueError('Offline executable SHA256 differs before display preparation')
     return dict(kind='launch-reservation',pid=os.getpid(),created=psutil.Process().create_time(),executable=stored_executable())

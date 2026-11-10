@@ -1,5 +1,6 @@
 """Process image selection fixtures. No test opens a foreign process handle."""
 import ast
+import ctypes
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -81,6 +82,18 @@ class ProcessInfoTests(unittest.TestCase):
         with patch.object(images,'process_images',return_value=[(7,'gameclientapp.patched.exe')]), \
              patch.object(psutil,'Process',side_effect=AssertionError('opened an image')):
             self.assertTrue(display.any_native_running())
+
+    def test_failed_toolhelp_snapshot_uses_same_chinese_error_for_launch_and_display(self):
+        kernel=Mock()
+        kernel.CreateToolhelp32Snapshot.return_value=ctypes.c_void_p(-1).value
+        errors=[]
+        with patch.object(images.ctypes,'WinDLL',return_value=kernel), patch.object(images.ctypes,'get_last_error',return_value=5):
+            for check in (session.native_pids,display.verified_launch):
+                with self.assertRaisesRegex(RuntimeError,'无法确认游戏是否已退出。请正常关闭游戏后重试') as failure:
+                    check()
+                errors.append(str(failure.exception))
+        self.assertEqual(errors[0],errors[1])
+        kernel.CloseHandle.assert_not_called()
 
     @unittest.skipUnless(os.name == 'nt','Windows snapshot')
     def test_real_process_snapshot_includes_current_python(self):
