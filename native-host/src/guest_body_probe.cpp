@@ -314,9 +314,10 @@ uintptr_t WINAPI tick(void* object,UINT cf){
     ++writes;if(s.climbing)++climbTicks;if(s.grounded)++grounded;else ++airborne;lastSequence=s.sequence;return result;
 }
 void stop(){active=false;bool hookRestored=!hooked;if(hooked){auto previous=InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),original,owned);hookRestored=previous==owned||previous==original;}restored=audioProfile(false,true)&&hookRestored;}
-void report(const std::filesystem::path& directory){
+void report(const std::filesystem::path& directory,const char* startupError=""){
     auto path=directory/(L"body-sync-"+std::to_wstring(GetCurrentProcessId())+L".json"),temp=path;temp+=L".tmp";
-    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":39,\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")
+    std::ofstream o(temp);o<<"{\"pid\":"<<GetCurrentProcessId()<<",\"probeVersion\":40,\"creation\":"<<nativeCreation
+      <<",\"startupError\":\""<<startupError<<"\",\"enabled\":"<<(active?"true":"false")<<",\"restored\":"<<(restored?"true":"false")
       <<",\"roadhogAudioBaseline\":"<<nativeHeroAudioGain.baseline.load()<<",\"roadhogAudioEffective\":"<<nativeHeroAudioGain.effective.load()
       <<",\"roadhogAudioBoosted\":"<<(nativeHeroAudioGain.boosted?"true":"false")<<",\"roadhogAudioCapped\":"<<(nativeHeroAudioGain.capped?"true":"false")
       <<",\"roadhogAudioApplications\":"<<nativeHeroAudioGain.applications.load()<<",\"roadhogAudioRestorations\":"<<nativeHeroAudioGain.restorations.load()<<",\"roadhogAudioRefused\":"<<nativeHeroAudioGain.refused.load()<<",\"roadhogAudioExternalChanges\":"<<nativeHeroAudioGain.externalChanges.load()
@@ -346,26 +347,31 @@ DWORD WINAPI worker(void*){
     std::filesystem::path exe,dll;
     if(!owmc::runningResearchClient(exe)||!owmc::moduleFilePath(module,dll))return 0;
     auto dir=dll.parent_path();
-    base=reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));admin=ptr(base+0x17b7f90);
-    if(!bindHero())return 0;
-    const std::array<unsigned char,17> signature{0x48,0x8b,0xc4,0x48,0x89,0x58,0x18,0x55,0x56,0x57,0x48,0x81,0xec,0xa0,0,0,0};
-    std::array<unsigned char,17> actual{};if(!read(base+0xa04000,actual)||actual!=signature)return 0;
-    struct List{uintptr_t items;int count,capacity;} l{};
-    if(!read(admin+0xf0,l)||l.count<1||l.count>l.capacity||l.capacity>32)return 0;
-    for(int i=0;i<l.count;i++){auto p=ptr(l.items+i*8);if(ptr(p)==base+0x15c4e28)hooked=reinterpret_cast<void*>(p);}
-    if(!hooked)return 0;
-    original=*reinterpret_cast<void***>(hooked);
-    if(original[0]!=reinterpret_cast<void*>(base+0xca0960)||original[1]!=reinterpret_cast<void*>(base+0xca0800)||original[2]!=reinterpret_cast<void*>(base+0xca09c0))return 0;
-    mapping=OpenFileMappingW(FILE_MAP_READ,FALSE,L"Local\\OWMCPassthroughFrame");if(!mapping)return 0;
-    auto view=static_cast<const unsigned char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,4096));if(!view)return 0;
-    body=view+1536;GuestBody s;if(!latest(s))return 0;
-    flightMapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,256,(L"Local\\OWMCNativeFlight_"+std::to_wstring(GetCurrentProcessId())).c_str());
-    if(!flightMapping||GetLastError()==ERROR_ALREADY_EXISTS)return 0;
-    flightMemory=static_cast<unsigned char*>(MapViewOfFile(flightMapping,FILE_MAP_WRITE,0,0,256));if(!flightMemory)return 0;
-    std::memset(flightMemory,0,256);
-    HANDLE halt=CreateEventW(nullptr,TRUE,FALSE,(L"Local\\OWMCBodyStop_"+std::to_wstring(GetCurrentProcessId())).c_str());if(!halt)return 0;
     FILETIME creation{},exitTime{},kernelTime{},userTime{};ULARGE_INTEGER creationNumber{};
-    if(GetProcessTimes(GetCurrentProcess(),&creation,&exitTime,&kernelTime,&userTime)){creationNumber.LowPart=creation.dwLowDateTime;creationNumber.HighPart=creation.dwHighDateTime;}
+    if(!GetProcessTimes(GetCurrentProcess(),&creation,&exitTime,&kernelTime,&userTime))return 0;
+    creationNumber.LowPart=creation.dwLowDateTime;creationNumber.HighPart=creation.dwHighDateTime;
+    nativeCreation=creationNumber.QuadPart;
+    auto reject=[&](const char* reason,bool untouched=true){++failures;restored=untouched;report(dir,reason);return DWORD{0};};
+    base=reinterpret_cast<uintptr_t>(GetModuleHandleW(nullptr));admin=ptr(base+0x17b7f90);
+    if(!bindHero())return reject("native hero binding");
+    const std::array<unsigned char,17> signature{0x48,0x8b,0xc4,0x48,0x89,0x58,0x18,0x55,0x56,0x57,0x48,0x81,0xec,0xa0,0,0,0};
+    std::array<unsigned char,17> actual{};if(!read(base+0xa04000,actual)||actual!=signature)return reject("original scene setter");
+    struct List{uintptr_t items;int count,capacity;} l{};
+    if(!read(admin+0xf0,l)||l.count<1||l.count>l.capacity||l.capacity>32)return reject("movement system list");
+    for(int i=0;i<l.count;i++){auto p=ptr(l.items+i*8);if(ptr(p)==base+0x15c4e28)hooked=reinterpret_cast<void*>(p);}
+    if(!hooked)return reject("original movement system absent",false);
+    original=*reinterpret_cast<void***>(hooked);
+    if(original[0]!=reinterpret_cast<void*>(base+0xca0960)||original[1]!=reinterpret_cast<void*>(base+0xca0800)||original[2]!=reinterpret_cast<void*>(base+0xca09c0))return reject("original movement callbacks",false);
+    mapping=OpenFileMappingW(FILE_MAP_READ,FALSE,L"Local\\OWMCPassthroughFrame");if(!mapping)return reject("MC shared frame mapping");
+    auto view=static_cast<const unsigned char*>(MapViewOfFile(mapping,FILE_MAP_READ,0,0,4096));if(!view)return reject("MC shared frame view");
+    // MC publishes its first body only after it reads an OW camera. The tick
+    // keeps native movement until it can validate a fresh body packet.
+    body=view+1536;
+    flightMapping=CreateFileMappingW(INVALID_HANDLE_VALUE,nullptr,PAGE_READWRITE,0,256,(L"Local\\OWMCNativeFlight_"+std::to_wstring(GetCurrentProcessId())).c_str());
+    if(!flightMapping||GetLastError()==ERROR_ALREADY_EXISTS)return reject("native flight mapping already owned",false);
+    flightMemory=static_cast<unsigned char*>(MapViewOfFile(flightMapping,FILE_MAP_WRITE,0,0,256));if(!flightMemory)return reject("native flight view");
+    std::memset(flightMemory,0,256);
+    HANDLE halt=CreateEventW(nullptr,TRUE,FALSE,(L"Local\\OWMCBodyStop_"+std::to_wstring(GetCurrentProcessId())).c_str());if(!halt)return reject("native body stop event");
     wchar_t lab[4]{};lifetimeLab=GetEnvironmentVariableW(L"OWMC_NATIVE_LIFETIME_LAB",lab,4)==1&&lab[0]==L'1';
     if(lifetimeLab){
         auto plugin=reinterpret_cast<uintptr_t>(GetModuleHandleW(L"inject.dll"));
@@ -373,14 +379,14 @@ DWORD WINAPI worker(void*){
         if(!owmc::loadedClientCompanion(reinterpret_cast<HMODULE>(plugin),exe,L"inject.dll")||!read(plugin+0x7acd0,code)||code!=signature)lifetimeLab=false;
         else{lifetimeHelper=reinterpret_cast<LifetimeHelper>(plugin+0x7acd0);lifetimeLogger=plugin+0x2d04c0;lifetimeCreation=creationNumber.QuadPart;}
     }
-    nativeCreation=creationNumber.QuadPart;
     std::shared_ptr<const DeadeyePresentationAck> savedDeadeye;
     std::shared_ptr<const ScrapCreditAck> savedScrap;
     std::array<std::shared_ptr<const PlacementActionAck>,5> savedPlacement;
     {std::lock_guard<std::mutex> lock(nativeHeroAudioMutex);if(!nativeHeroAudioGain.begin()){++failures;report(dir);CloseHandle(halt);return 0;}
         nativeHeroAudioGain.prepare(base,[](uintptr_t p,void* out,size_t size){SIZE_T n=0;return ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(p),out,size,&n)&&n==size;});}
     owned=new void*[3]{reinterpret_cast<void*>(tick),original[1],original[2]};active=true;
-    if(InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),owned,original)!=original){active=false;++failures;report(dir);CloseHandle(halt);return 0;}
+    if(InterlockedCompareExchangePointer(reinterpret_cast<PVOID volatile*>(hooked),owned,original)!=original){active=false;CloseHandle(halt);return reject("movement callback already owned",false);}
+    report(dir);
     for(unsigned i=0;i<2880000&&active;i++){
         if(WaitForSingleObject(halt,10)!=WAIT_TIMEOUT)break;
         for(int k=1;k<=5;k++){

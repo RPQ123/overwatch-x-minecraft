@@ -4,11 +4,19 @@ from pathlib import Path
 from ctypes import wintypes
 from observe_overwatch import ROOT,ResearchProcess
 
+BODY_RECOVERY_PINS = {
+    39: '48325e7b6587af7527ddf8fd0d5822b4830c7d6b63970bcffb7c7f7d52c4ca82',
+    40: '1ea18b895042efd506fedbd357263fba2aa40303f993bfec3d005e2366836299',
+}
+
 def read_report(path):
     # Windows can briefly deny opening a report while its atomic replace runs.
     # A transient read must not interrupt orderly callback restoration.
     for attempt in range(8):
-        try:return json.loads(path.read_text(encoding='utf-8'))
+        try:
+            value=json.loads(path.read_text(encoding='utf-8'))
+            if not isinstance(value,dict):raise ValueError('Expected a native report object')
+            return value
         except (OSError,ValueError):
             if attempt==7:raise
             time.sleep(.03)
@@ -18,20 +26,25 @@ def restoration_complete(report,pid,*,compositor=False):
     # The render owner clears active and publishes the vtable result before its
     # input/light/frame-limit releases finish. Do not accept that intermediate
     # snapshot and terminate the process while those releases are still running.
-    if compositor and report.get('probeVersion',0)>=37:
+    version=report.get('probeVersion',0)
+    if type(version) is not int:return False
+    if compositor and version>=37:
         return (report.get('slotInputFilter') is False
                 and all(report.get(key) is True for key in ('slotInputRestored','viewLightRestored','nativeFrameLimitRestored')))
     return True
 
 def original_body_callbacks(process):
-    """Read-only proof for the SHA-guarded v10 body's original three-slot table."""
+    """Read-only proof of the original movement system and its three callbacks."""
     def read(fmt,address):return struct.unpack(fmt,process.read(address,struct.calcsize(fmt)))
     admin,=read('<Q',process.base+0x17b7f90)
     items,count,capacity=read('<Qii',admin+0xf0)
     if not 1<=count<=capacity<=32:return False
     matches=0;expected=tuple(process.base+offset for offset in (0xca0960,0xca0800,0xca09c0))
     for index in range(count):
-        component,=read('<Q',items+index*8);table,=read('<Q',component)
+        component,=read('<Q',items+index*8)
+        if not component:continue
+        table,=read('<Q',component)
+        if not table:continue
         if table==process.base+0x15c4e28:
             if read('<3Q',table)!=expected:return False
             matches+=1
@@ -130,12 +143,14 @@ def recover_body_terminal_report(process,pid,path):
         from launch_passthrough_session import installed_modules
         modules=installed_modules(pid)
         pins={13:'35208fc277cedca3e3f6b85497ce9b3249e9fd6a8811bb03fa8760add99b861d',14:'7e4c57e491d557c71501000c4ea41407fe973ffb07a277399bb8825ef49323f3',15:'6631271a4e3247aa31f68b56a5d43c165502b9d196430ac40a74ab4cc5ed5cd4',16:'ddc6083e3db42286217292c39e48cb10ab663aa06b2e1bd62c5b53294805cffc',17:'e919c0406d66495468304dd8d8f22bb57d9fc6175b235af5ac7ad056fc471516',18:'dc8e7768b80a4b4dba7579f4db31639e7ecc7254449fdc8593dbefa015c87afe',19:'b54c94dae41563bc6a4df29c75a1c73367a9998bd98eebd56bb093e837b7c8d2',20:'6beb19ccf2f3672ddaac8e059688ab230261ca23308ab9404c414130752b2702',21:'89100f0b219f7f28fd346586bd372bb15abaea1cc8691432ca6e0b7c5af60dd2',22:'cbe392b3dd70607b9330c6cb06daeea8e3f4b82473a6adf3d6ae96f69f04ea68',23:'7d643cfb339448b43532e1d45346f7ee8931f31cc41e9293b8e8f856fac0ca82',24:'f31b3d6620f69a799417c360e00da8af6c34e8d763cd209d3053b76d5800c5a7',25:'941bf7a6232e9cb9dead9b8ef7c6a04c6ea52eb42786c372bd4742b32a2b25c4',26:'66e4e47e68b280a8cc2e699ff3cfd94e231531699cb3a7e1370184540e3156e9'}
+        pins.update(BODY_RECOVERY_PINS)
         versions=[v for v in pins if f'owmc-guest-body-v{v}.dll' in modules]
         if len(versions)!=1:return _recover_terminal_report(process,pid,path,10,lambda:original_body_callbacks(process))
         version=versions[0];name=f'owmc-guest-body-v{version}.dll';dll=ROOT/'native-host/build'/name
         owners=[n for n in modules if n.startswith('owmc-guest-body-v') and n.endswith('.dll')]
         if owners==[name] and modules.get(name)==dll.resolve() and hashlib.sha256(dll.read_bytes()).hexdigest()==pins[version]:
-            return _recover_terminal_report(process,pid,path,version,lambda:original_body_callbacks(process))
+            return _recover_terminal_report(process,pid,path,version,lambda:original_body_callbacks(process),
+                                            lambda report: 'creation' not in report or report['creation']==process_creation(process))
     except (OSError,ValueError,psutil.Error):pass
     return _recover_terminal_report(process,pid,path,10,lambda:original_body_callbacks(process))
 
@@ -191,12 +206,17 @@ def recover_compositor_terminal_report(process,pid,path):
         return _recover_terminal_report(process,pid,path,40,lambda:original_compositor40_restored(process,base),lambda terminal:restoration_complete(terminal,pid,compositor=True))
     except (OSError,ValueError,psutil.Error,struct.error):return None
 
+class NoStopEvent(ValueError):
+    pass
+
+
 def stop(pid,body=False,weapon=False,emissions=False):
     if sum((body,weapon,emissions))>1:raise ValueError('Stop one independent callback owner at a time')
     process=ResearchProcess(pid);kernel=process.kernel
     kernel.OpenEventW.argtypes=[wintypes.DWORD,wintypes.BOOL,wintypes.LPCWSTR];kernel.OpenEventW.restype=wintypes.HANDLE
     kernel.SetEvent.argtypes=[wintypes.HANDLE]
-    handle=kernel.OpenEventW(2,False,f'Local\\OWMCEmissionStop_{pid}' if emissions else f'Local\\OWMCWeaponGateStop_{pid}' if weapon else f'Local\\OWMCBodyStop_{pid}' if body else f'Local\\OWMCLiveStop_{pid}')
+    event_name=f'Local\\OWMCEmissionStop_{pid}' if emissions else f'Local\\OWMCWeaponGateStop_{pid}' if weapon else f'Local\\OWMCBodyStop_{pid}' if body else f'Local\\OWMCLiveStop_{pid}'
+    handle=None
     try:
         prefix='native-emissions' if emissions else 'weapon-gate' if weapon else 'body-sync' if body else 'world-live'
         path=ROOT/f'native-host/build/{prefix}-{pid}.json'
@@ -206,19 +226,33 @@ def stop(pid,body=False,weapon=False,emissions=False):
             if weapon:return recover_weapon_terminal_report(process,pid,path)
             if not weapon:return recover_compositor_terminal_report(process,pid,path)
             return None
-        if not handle:
+        for attempt in range(5):
+            handle=kernel.OpenEventW(2,False,event_name)
+            if handle:break
+            open_error=ctypes.get_last_error()
+            if open_error not in (0,2):raise ctypes.WinError(open_error)
             recovered=recover()
             if recovered is not None:print(json.dumps(recovered,indent=2));return recovered
-            raise ValueError('No active local passthrough stop event')
+            if attempt<4:time.sleep(.1)
+        if not handle:
+            raise NoStopEvent('No active local passthrough stop event')
         if not kernel.SetEvent(handle):raise ctypes.WinError(ctypes.get_last_error())
+        created=psutil.Process(pid).create_time()
         deadline=time.monotonic()+20
         while time.monotonic()<deadline:
-            if path.exists():
+            try:
                 report=read_report(path)
-                if restoration_complete(report,pid,compositor=not (body or weapon or emissions)):
+                if (path.stat().st_mtime>=created
+                        and ('creation' not in report or report['creation']==process_creation(process))
+                        and restoration_complete(report,pid,compositor=not (body or weapon or emissions))):
                     version=report.get('probeVersion',2 if body else 7)
-                    (path.parent/f'{prefix}-v{version}-{pid}.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+                    try:
+                        (path.parent/f'{prefix}-v{version}-{pid}.json').write_text(json.dumps(report,indent=2)+'\n',encoding='utf-8')
+                    except OSError:
+                        pass  # The current report already proves restoration.
                     print(json.dumps(report,indent=2));return report
+            except (OSError,ValueError):
+                pass  # A mapped owner can restore even before its first report exists.
             recovered=recover()
             if recovered is not None:print(json.dumps(recovered,indent=2));return recovered
             time.sleep(.1)

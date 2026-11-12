@@ -36,7 +36,13 @@ def verify_original_body_table(process):
         if address and reader.pointer(address)==base+0x15c4e28:matches.append(address)
     if len(matches)!=1 or struct.unpack('<3Q',process.read(base+0x15c4e28,24))!=tuple(base+rva for rva in (0xca0960,0xca0800,0xca09c0)):raise ValueError('Previous body callback is not the original restored movement table')
 
-def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,local_hero=False,empty_scene=False,body_sync=False,weapon_gate=False,emissions=False,bootstrap=False,selection_depth=False,bootstrap_map=0x08000000000002af,*,loading=None):
+class NativeLoaderPending(TimeoutError):
+    pass
+
+
+def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,local_hero=False,empty_scene=False,body_sync=False,weapon_gate=False,emissions=False,bootstrap=False,selection_depth=False,bootstrap_map=0x08000000000002af,*,loading=None,wait_for_report=True):
+    if not wait_for_report and not (body_sync or weapon_gate or emissions):
+        raise ValueError('Only optional session observers may defer their report')
     if empty_scene and not local_hero:raise ValueError('Empty-scene permission only applies to the fixed original hero probe')
     if sum((world_blend,pose_observer,live_passthrough,local_hero,body_sync,weapon_gate,emissions,bootstrap,selection_depth))>1:raise ValueError('Choose one fixed probe mode')
     dll = ROOT/'native-host/build/owmc-selection-depth-v1.dll' if selection_depth else ROOT/'native-host/build'/EMISSION_DLL if emissions else ROOT/'native-host/build'/GATE_DLL if weapon_gate else ROOT/'native-host/build'/BODY_DLL if body_sync else ROOT/'native-host/build/owmc-local-hero-spawn-v1.dll' if local_hero else ROOT/'native-host/build'/COMPOSITOR_DLL if live_passthrough else ROOT/'native-host/build/owmc-pose-observer-v1.dll' if pose_observer else ROOT/'native-host/build/owmc-world-blend-probe.dll' if world_blend else DLL
@@ -239,8 +245,11 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
         thread = create_thread(process, None, 0, remote_loader, remote, 0, None)
         if not thread:
             raise ctypes.WinError(ctypes.get_last_error())
-        if wait(thread, 15000) != 0:
-            raise TimeoutError('Native loader pending; do not load a second probe')
+        loader_wait = wait(thread, 15000 if wait_for_report else 750)
+        if loader_wait == 0x102:
+            raise NativeLoaderPending('Native loader pending; do not load a second probe')
+        if loader_wait != 0:
+            raise ctypes.WinError(ctypes.get_last_error())
         loader_finished = True
     finally:
         if remote and (loader_finished or not thread):
@@ -249,6 +258,8 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
         if process:close(process)
         if snapshot:close(snapshot)
         verified.close()
+    if not wait_for_report:
+        return
     report = dll.parent / (f'native-emissions-{pid}.json' if emissions else f'weapon-gate-{pid}.json' if weapon_gate else f'body-sync-{pid}.json' if body_sync else f'local-hero-{pid}.json' if local_hero else f'world-live-{pid}.json' if live_passthrough else f'host-pose-{pid}.json' if pose_observer else f'hand-depth-{pid}.json')
     if bootstrap:report=dll.parent/f'session-bootstrap-{pid}.json'
     for _ in range(900 if bootstrap else 300 if loading else 100):
@@ -287,6 +298,8 @@ def attach(pid, world_blend=False,pose_observer=False,live_passthrough=False,loc
         time.sleep(.1)
     if live_passthrough:
         raise TimeoutError('OW 画面合成器未在时限内就绪。请先正常结束游戏，再重试。')
+    if body_sync:
+        raise TimeoutError('MC 身体同步尚未开始。请检查 MC 世界与原版相机是否已接入。')
     raise TimeoutError('No completed observation; do not reload. Three-frame stop needs active presents.')
 
 if __name__ == '__main__':

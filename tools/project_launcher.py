@@ -28,6 +28,7 @@ import psutil
 from modpack.config import PackPaths, OW_RELATIVE, OW_SHA256
 from startup_cover import (LOAD_SECONDS, START_ACTIONS, LoadingTicket, covered_timeline_path, loading_progress, milestones,
                            CoverWatchdog, loading_render_samples, matching_timeline, presentation_receipt, startup_failure_text)
+from startup_timeline import LOG_HEADER, LOG_HEADER_BYTES, reserve_log_header, update_log_header
 
 ROOT = Path(__file__).resolve().parents[1]
 EXE_RELATIVE = Path(OW_RELATIVE)
@@ -437,9 +438,15 @@ class SessionBackend:
             return []
         try:
             with path.open('rb') as stream:
+                head = stream.readline(LOG_HEADER_BYTES).rstrip()
                 stream.seek(0, 2)
+                omitted = stream.tell() > 16_384
                 stream.seek(max(0, stream.tell() - 16_384))
-                return stream.read().decode('utf-8', errors='replace').splitlines()[-8:]
+                tail = stream.read().splitlines()[-8:]
+            if head and (omitted or head.startswith(LOG_HEADER)):
+                tail = [head, *([b'...'] if omitted else []),
+                        *(line for line in tail if not line.startswith(LOG_HEADER))]
+            return [line.decode('utf-8', errors='replace') for line in tail]
         except OSError:
             return []
 
@@ -556,7 +563,10 @@ def run_action(backend: SessionBackend, action: str, log: Path, world_name: str 
               'log': str(log)}
     if loading:
         record['loading'] = True
+    header = None
     try:
+        if action in START_ACTIONS:
+            header = reserve_log_header(log, backend.root)
         write_object(backend.action_path, record)
         if loading:
             result = backend.start_covered(action, log, LoadingTicket.open(backend.root, request_id))
@@ -570,6 +580,8 @@ def run_action(backend: SessionBackend, action: str, log: Path, world_name: str 
         return 1
     finally:
         try:
+            if header is not None and loading:
+                update_log_header(log, header, backend.loading_timeline(record['requestId']))
             write_object(backend.action_path, record)
         finally:
             mutex.close()
@@ -604,6 +616,10 @@ def describe_snapshot(snapshot: dict) -> tuple[str, str, str]:
         return ('会话已停止', '启动会重新使用现有独立监督与严格恢复流程。', 'neutral')
     if snapshot.get('nativeAlive') and snapshot.get('fresh'):
         if status.get('phase') == 'hero-selection':
+            if status.get('startupPresentationNotice'):
+                return ('等待选择英雄', status['startupPresentationNotice'], 'warning')
+            if status.get('nativeObserversPending'):
+                return ('等待选择英雄', '请在 OW 选人界面确认英雄。MC 身体或武器同步仍在初始化。', 'warning')
             return ('等待选择英雄', '这是正常阶段。请在原生 OW 选人界面确认英雄；ready=false 不表示启动失败。', 'normal')
         if status.get('error'):
             return ('部分运行条件未就绪', str(status['error']), 'warning')
@@ -1095,10 +1111,11 @@ class LauncherUI:
             event = next((event for event in timeline.get('events', ()) if event.get('name') == 'startup_failed'), {})
             self.fail_loading(event.get('error') or '启动监督报告失败。')
             return
-        if ticket and 'loading_presentation_skipped' in milestones(timeline):
+        if ticket and (event := next((row for row in timeline.get('events', ())
+                                     if row.get('name') == 'loading_presentation_skipped'), None)):
             self.try_loading_focus()
+            self.action_var.set(event.get('notice') or '请单击 OW 窗口进入游戏。MC 画面仍在连接。')
             if self.loading_ticket is None:return
-            self.action_var.set('游戏已在后台启动，画面仍在连接。请单击 OW 窗口。')
             try:
                 self.end_loading('released')
             except (OSError, RuntimeError) as failure:

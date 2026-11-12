@@ -156,12 +156,32 @@ class EmissionTerminalTests(unittest.TestCase):
         self.assertIsNone(self.recover());self.unchanged()
 
 class StopRecoveryScopeTests(unittest.TestCase):
+    def test_stop_waits_for_owner_event_and_terminal_report_even_when_initial_report_is_missing(self):
+        process=Mock()
+        process.kernel.OpenEventW.side_effect=[0,70]
+        terminal=dict(pid=42,enabled=False,restored=True,probeVersion=40,creation=123)
+        with tempfile.TemporaryDirectory() as d:
+            root=Path(d)
+            path=root/'native-host/build/body-sync-42.json'
+            path.parent.mkdir(parents=True)
+            path.touch()
+            with patch.object(stop,'ROOT',root),patch.object(stop,'ResearchProcess',return_value=process), \
+                 patch.object(stop.psutil,'Process',return_value=Mock(create_time=Mock(return_value=0))), \
+                 patch.object(stop,'process_creation',return_value=123),patch.object(stop.ctypes,'get_last_error',return_value=2), \
+                 patch.object(stop,'recover_body_terminal_report',return_value=None),patch.object(stop.time,'sleep'), \
+                 patch.object(stop,'read_report',side_effect=[FileNotFoundError(),ValueError('invalid JSON'),terminal]), \
+                 patch.object(Path,'write_text',side_effect=PermissionError('archive unavailable')),patch('builtins.print'):
+                self.assertEqual(stop.stop(42,body=True),terminal)
+        process.kernel.SetEvent.assert_called_once_with(70)
+        process.kernel.CloseHandle.assert_called_once_with(70)
+        process.close.assert_called_once()
+
     def test_missing_event_only_allows_calibrated_terminal_recovery(self):
         for options in ({},{'body':True},{'weapon':True},{'emissions':True}):
             with self.subTest(options=options):
                 process=Mock();process.kernel.OpenEventW.return_value=0
                 terminal={'pid':42,'enabled':False,'restored':True}
-                with patch.object(stop,'ResearchProcess',return_value=process),patch.object(stop,'recover_body_terminal_report',return_value=terminal) as recovery,patch.object(stop,'recover_emission_terminal_report',return_value=terminal) as emission,patch.object(stop,'recover_compositor_terminal_report',return_value=terminal) as compositor,patch('builtins.print'):
+                with patch.object(stop,'ResearchProcess',return_value=process),patch.object(stop,'recover_body_terminal_report',return_value=terminal) as recovery,patch.object(stop,'recover_emission_terminal_report',return_value=terminal) as emission,patch.object(stop,'recover_compositor_terminal_report',return_value=terminal) as compositor,patch.object(stop.ctypes,'get_last_error',return_value=2),patch.object(stop.time,'sleep'),patch('builtins.print'):
                     if options.get('body'):
                         self.assertEqual(stop.stop(42,**options),terminal);recovery.assert_called_once()
                     elif options.get('emissions'):

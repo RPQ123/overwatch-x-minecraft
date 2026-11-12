@@ -1,4 +1,4 @@
 """Single selected compositor identity for cold startup/adoption; never hot reload."""
 # Independent exact-depth viewmodel group union; retains reflected slots/HNZ2.
-VERSION=50
+VERSION=51
 DLL=f'owmc-live-passthrough-v{VERSION}.dll'

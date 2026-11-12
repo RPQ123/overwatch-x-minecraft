@@ -274,6 +274,28 @@ class LauncherFixtures(unittest.TestCase):
         outside.write_text('not a launcher log', encoding='utf-8')
         self.assertEqual(self.backend.recent_log({'log': str(outside)}), [])
 
+    def test_startup_log_header_survives_long_output_and_is_updated_in_place(self):
+        path=self.backend.logs/'启动 测试.log'
+        path.parent.mkdir(parents=True)
+        path.touch()
+        base=dict(root=str(self.root/'中文 路径'),windowsBuild='10.0.22631',
+                  primaryDisplay=dict(width=2560,height=1440,refreshHz=165),scalePercent=150)
+        with patch('startup_timeline.startup_environment',return_value=base):
+            self.assertEqual(launcher.reserve_log_header(path,self.root),base)
+        body=('中间日志\n'*5000+'结尾\n').encode('utf-8')
+        with path.open('ab') as stream:stream.write(body)
+        launcher.update_log_header(path,base,dict(status='ready',totalMs=1200,stagesMs={'compositor_attach':500},
+            events=[dict(name='loading_presentation_ready',guest=dict(published=55),report=dict(lastMcFrame=42))]))
+        self.assertEqual(path.read_bytes()[launcher.LOG_HEADER_BYTES:],body)
+        preview=self.backend.recent_log({'log':str(path)})
+        summary=json.loads(preview[0].removeprefix(launcher.LOG_HEADER.decode()))
+        self.assertEqual(summary['primaryDisplay']['refreshHz'],165)
+        self.assertEqual(summary['worldLive']['lastMcFrame'],42)
+        self.assertEqual(summary['mc']['published'],55)
+        self.assertEqual(summary['stagesMs'],{'compositor_attach':500})
+        self.assertEqual(preview[-1],'结尾')
+        self.assertLessEqual(len(preview),10)
+
     def test_process_matching_uses_exact_script_path_and_interpreter(self):
         target = self.root / 'tools/launch_passthrough_session.py'
         interpreter = self.root / '.venv/Scripts/python.exe'

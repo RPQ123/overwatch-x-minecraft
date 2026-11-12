@@ -65,6 +65,21 @@ int main() {
     ),verifyAddress=GetProcAddress(module,"OWMC_HandDepthTestVerify");
     static_assert(sizeof attach==sizeof attachAddress);memcpy(&attach,&attachAddress,sizeof attach);memcpy(&verify,&verifyAddress,sizeof verify);
     assert(attach&&verify&&attach(swap.Get()));
+#if defined(OWMC_LIVE_BLEND) && OWMC_LIVE_VERSION >= 51
+    // A missing first host camera must preserve the original pixels while
+    // MC frame publication and the native compositor catch up.
+    FLOAT nativeColor[]{1,0,0,1};ctx->ClearRenderTargetView(rtv.Get(),nativeColor);
+    gpuCheck(swap->Present(0,0),"present without first camera");
+    D3D11_TEXTURE2D_DESC firstDesc{};presentColor->GetDesc(&firstDesc);
+    firstDesc.Usage=D3D11_USAGE_STAGING;firstDesc.BindFlags=0;firstDesc.CPUAccessFlags=D3D11_CPU_ACCESS_READ;
+    ComPtr<ID3D11Texture2D> firstReadback;
+    gpuCheck(dev->CreateTexture2D(&firstDesc,nullptr,firstReadback.GetAddressOf()),"original frame readback");
+    ctx->CopyResource(firstReadback.Get(),presentColor.Get());D3D11_MAPPED_SUBRESOURCE firstPixels{};
+    gpuCheck(ctx->Map(firstReadback.Get(),0,D3D11_MAP_READ,0,&firstPixels),"original pixels");
+    auto* firstPixel=static_cast<const unsigned char*>(firstPixels.pData);
+    assert(firstPixel[0]==255&&firstPixel[1]==0&&firstPixel[2]==0&&firstPixel[3]==255);
+    ctx->Unmap(firstReadback.Get(),0);
+#endif
 #ifdef OWMC_LIVE_BLEND
     // Non-camera uploads must remain usable while their identities are cached.
     auto otherDesc=bd;otherDesc.ByteWidth=64;ComPtr<ID3D11Buffer> other;

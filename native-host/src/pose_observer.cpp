@@ -64,6 +64,8 @@ struct CpuScope {
     ~CpuScope(){total+=std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now()-start).count();}
 };
 std::atomic<unsigned> viewMode{0}; // 1 first person, 2 native hero selection.
+unsigned cameraCandidateStage=0;
+std::atomic<unsigned> lastCameraCandidateStage{0};
 NativeLocalHero presentationHero;
 #ifdef OWMC_LIVE_BLEND
 NativeLocalHero viewmodelLensHero; // Render-owner read only, refreshed at most once per frame.
@@ -163,7 +165,7 @@ std::shared_ptr<const WorldFrame> latestWorld;
 std::array<HostPose,256> poseHistory{};
 std::atomic<unsigned> blended{0},sourceRejected{0},coverageRejected{0},incompleteHands{0},sourceFrames{0},textureAllocations{0},colorUploads{0};
 std::atomic<uint64_t> sourceReadCpuNs{0},sourcePolls{0},sourcePoolBusy{0};
-std::atomic<unsigned> unmaskedFrames{0},heldFrames{0};
+std::atomic<unsigned> unmaskedFrames{0},heldFrames{0},originalFramesBeforeComposition{0};
 std::atomic<uint64_t> maxPoseAge{0},lastMcFrame{0},lastMcGeneration{0};
 #endif
 template<class T> bool read(uintptr_t a,T& v) {SIZE_T n=0;return a>=0x10000&&a<0x7fffffffffffULL&&ReadProcessMemory(GetCurrentProcess(),reinterpret_cast<void*>(a),&v,sizeof v,&n)&&n==sizeof v;}
@@ -363,12 +365,18 @@ void observe() {
     if(!active||captured) return;
     ComPtr<ID3D11Buffer> cb;context->VSGetConstantBuffers(9,1,cb.GetAddressOf());if(!cb) return;
     Upload* u=nullptr;for(auto& candidate:uploads) if(candidate.id==reinterpret_cast<uintptr_t>(cb.Get())&&candidate.valid) u=&candidate;
-    if(!u||isCurrentViewmodelLens(u->values)) return;
+    if(!u) return;
+    cameraCandidateStage=std::max(cameraCandidateStage,1u);
+    if(isCurrentViewmodelLens(u->values)) return;
+    cameraCandidateStage=std::max(cameraCandidateStage,2u);
     UINT count=1;D3D11_VIEWPORT vp{};context->RSGetViewports(&count,&vp);if(count!=1||vp.TopLeftX||vp.TopLeftY||vp.Width!=width||vp.Height!=height) return;
+    cameraCandidateStage=std::max(cameraCandidateStage,3u);
     ComPtr<ID3D11DepthStencilView> dsv;context->OMGetRenderTargets(0,nullptr,dsv.GetAddressOf());if(!dsv) return;
     ComPtr<ID3D11Resource> resource;dsv->GetResource(resource.GetAddressOf());ComPtr<ID3D11Texture2D> depth;if(FAILED(resource.As(&depth))) return;
     D3D11_TEXTURE2D_DESC d{};depth->GetDesc(&d);if(d.Width!=width||d.Height!=height) return;
+    cameraCandidateStage=std::max(cameraCandidateStage,4u);
     HostPose pose;if(!poseFromScene(u->values,width,height,frames.load()+1,pose)) return;
+    cameraCandidateStage=5;
     if(renderOwner==std::thread::id{}) {renderOwner=std::this_thread::get_id();renderThread=GetCurrentThreadId();}
     if(renderOwner!=std::this_thread::get_id()) {fail("camera",std::runtime_error("Original render thread changed"));return;}
     pose.flags=fixture?2:1;pose.generation=publisher->session();pose.pid=GetCurrentProcessId();pose.wallMs=unixMillis();
@@ -424,6 +432,8 @@ void observeHands() {
 }
 void blendAtHud(ID3D11DeviceContext* c,ID3D11DepthStencilView* dsv,UINT flags) {
     if(!active||!dsv||flags!=D3D11_CLEAR_STENCIL||frameBlended||!captured) return;
+    auto image=std::atomic_load(&latestWorld);
+    if(!fixture&&!image)return;
     ComPtr<ID3D11RenderTargetView> color;c->OMGetRenderTargets(1,color.GetAddressOf(),nullptr);if(!color) return;
     ComPtr<ID3D11Resource> resource;color->GetResource(resource.GetAddressOf());ComPtr<ID3D11Texture2D> target;
     gpuCheck(swap->GetBuffer(0,__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(target.GetAddressOf())),"live target");if(resource.Get()!=target.Get()) return;
@@ -439,15 +449,14 @@ void blendAtHud(ID3D11DeviceContext* c,ID3D11DepthStencilView* dsv,UINT flags) {
     if(!selection&&!handInvalid&&handBefore&&!handAfter&&handDepth){blender->captureAfter(handDepth.Get());handAfter=true;handDepth.Reset();}
     bool preserveHand=blender->ready()&&(selection||(!handInvalid&&handBefore&&handAfter));if(!preserveHand)unmaskedFrames++;
     handMaskTrace.decision(handBefore,handAfter,handInvalid,preserveHand);
-    auto current=std::atomic_load(&latestPose);auto image=std::atomic_load(&latestWorld);
+    auto current=std::atomic_load(&latestPose);
     WorldFrame testImage;
     if(fixture) {
         testImage.width=32;testImage.height=18;testImage.generation=17;testImage.mcFrame=frames.load()+1;testImage.rgba.assign(32*18*4,255);for(size_t i=0;i<testImage.rgba.size();i+=4) {testImage.rgba[i]=0;testImage.rgba[i+1]=0;}
         blender->draw(target.Get(),testImage,Matrix::identity(),preserveHand,1.f,selection?.98f:0.f);
     } else {
         auto now=unixMillis();
-        // Stale/unmatched images are held without relabeling their pose. Until
-        // the first MC image arrives use a neutral private scene, never old map.
+        // Stale/unmatched images are held without relabeling their pose.
         Matrix warp=image&&current?heldImageWarp(*image,*current):Matrix::identity();
         // A selection -> first-person lens jump can briefly outrun MC. The old
         // narrow image cannot cover the new view. Hold the last complete frame
@@ -471,8 +480,8 @@ void blendAtHud(ID3D11DeviceContext* c,ID3D11DepthStencilView* dsv,UINT flags) {
         // Pharah's existing separate tint policy is deliberately unchanged.
         firstPersonExposure=1.f;
 #endif
-        if(image) {blender->draw(target.Get(),*image,warp,preserveHand,selection?1.f:firstPersonExposure,selection?.98f:0.f,pharah);lastMcFrame=image->mcFrame;lastMcGeneration=image->generation;}
-        else {testImage.width=1;testImage.height=1;testImage.generation=1;testImage.mcFrame=1;testImage.rgba={24,28,32,255};blender->draw(target.Get(),testImage,warp,preserveHand,firstPersonExposure,0.f,pharah);}
+        blender->draw(target.Get(),*image,warp,preserveHand,selection?1.f:firstPersonExposure,selection?.98f:0.f,pharah);
+        lastMcFrame=image->mcFrame;lastMcGeneration=image->generation;
     }
     if(!fixture) {
         // Preserve the actual composed terrain/hands under the native debug
@@ -547,11 +556,10 @@ HRESULT WINAPI present(IDXGISwapChain* s,UINT interval,UINT flags) {
             }
             if(!lastPresented) {ComPtr<ID3D11Device> device;context->GetDevice(device.GetAddressOf());d.BindFlags=0;d.MiscFlags=0;d.Usage=D3D11_USAGE_DEFAULT;d.CPUAccessFlags=0;gpuCheck(device->CreateTexture2D(&d,nullptr,lastPresented.GetAddressOf()),"last composed frame");}
             context->CopyResource(lastPresented.Get(),target.Get());
-        } else {
+        } else if(lastPresented) {
             heldFrames++;
-            if(lastPresented)context->CopyResource(target.Get(),lastPresented.Get());
-            else {ComPtr<ID3D11RenderTargetView> view;ComPtr<ID3D11Device> device;context->GetDevice(device.GetAddressOf());gpuCheck(device->CreateRenderTargetView(target.Get(),nullptr,view.GetAddressOf()),"neutral startup target");const FLOAT neutral[]{.094f,.110f,.125f,1};context->ClearRenderTargetView(view.Get(),neutral);}
-        }
+            context->CopyResource(target.Get(),lastPresented.Get());
+        } else originalFramesBeforeComposition++;
     }catch(const std::exception& e) {fail("present",e);}
 #endif
     // Reserve GPU submission time for the real guest. Test presents and the
@@ -588,12 +596,13 @@ HRESULT WINAPI present(IDXGISwapChain* s,UINT interval,UINT flags) {
         handMaskTrace.finish(frames.load()+1,unixMillis(),viewMode);
         handDepth.Reset();handBefore=false;handAfter=false;handInvalid=false;handGroups=0;frameBlended=false;if(blender) blender->beginFrame();
 #endif
+        lastCameraCandidateStage=cameraCandidateStage;cameraCandidateStage=0;
         frames++;captured=false;
         if(!fixture)viewMode=nativeViewMode();
 #ifdef OWMC_LIVE_BLEND
         if(!fixture&&!stopRequested)try{updateViewLight();}catch(const std::exception& e){fail("lighting",e);}
 #endif
-        if(stopRequested||(fixture&&frames>=3)) stop();
+        if(stopRequested||(fixture&&frames>=(OWMC_LIVE_VERSION>=51?4u:3u))) stop();
         else {ComPtr<ID3D11Texture2D> buffer;if(SUCCEEDED(s->GetBuffer(0,__uuidof(ID3D11Texture2D),reinterpret_cast<void**>(buffer.GetAddressOf())))) {D3D11_TEXTURE2D_DESC d{};buffer->GetDesc(&d);width=d.Width;height=d.Height;}}
     }
     return result;
@@ -693,7 +702,8 @@ void report(const std::filesystem::path& dir) {
     out<<",\"sourceReadCpuNs\":"<<sourceReadCpuNs<<",\"sourcePolls\":"<<sourcePolls<<",\"sourcePoolBusy\":"<<sourcePoolBusy;
     out<<",\"viewLightEpoch\":"<<lightEpoch<<",\"viewLightHero\":"<<lightHero<<",\"viewLightModelId\":"<<lightModel<<",\"viewLightWorldId\":"<<lightWorld<<",\"viewLightAddress\":"<<lightAddress<<",\"viewLightBindings\":"<<lightBindings;
     out<<",\"viewLightVerifiedEpoch\":"<<lightVerifiedEpoch<<",\"viewLightPacketEpoch\":"<<lightPacketEpoch<<",\"viewLightSamples\":"<<lightSamples<<",\"viewLightLocated\":"<<lightLocated;
-    out<<",\"blended\":"<<blended<<",\"sourceRejected\":"<<sourceRejected<<",\"coverageRejected\":"<<coverageRejected<<",\"unblendedPoses\":"<<incompleteHands<<",\"unmaskedFrames\":"<<unmaskedFrames<<",\"heldFrames\":"<<heldFrames<<",\"sourceFrames\":"<<sourceFrames<<",\"textureAllocations\":"<<textureAllocations<<",\"colorUploads\":"<<colorUploads<<",\"maxPoseAgeMs\":"<<maxPoseAge<<",\"lastMcFrame\":"<<lastMcFrame<<",\"lastMcGeneration\":"<<lastMcGeneration<<",\"nativeDrawingModified\":true,\"gpuReadbacks\":0";
+ out<<",\"blended\":"<<blended<<",\"sourceRejected\":"<<sourceRejected<<",\"coverageRejected\":"<<coverageRejected<<",\"unblendedPoses\":"<<incompleteHands<<",\"unmaskedFrames\":"<<unmaskedFrames<<",\"heldFrames\":"<<heldFrames<<",\"sourceFrames\":"<<sourceFrames<<",\"textureAllocations\":"<<textureAllocations<<",\"colorUploads\":"<<colorUploads<<",\"maxPoseAgeMs\":"<<maxPoseAge<<",\"lastMcFrame\":"<<lastMcFrame<<",\"lastMcGeneration\":"<<lastMcGeneration<<",\"nativeDrawingModified\":true,\"gpuReadbacks\":0"
+    <<",\"originalFramesBeforeComposition\":"<<originalFramesBeforeComposition;
 #else
     out<<",\"nativeDrawingModified\":false";
 #endif
@@ -719,7 +729,7 @@ void report(const std::filesystem::path& dir) {
     }
     out<<']';
 #endif
-    out<<",\"viewMode\":"<<viewMode<<",\"presentationFps\":"<<presentationFps<<",\"requestedSyncInterval\":"<<requestedInterval<<",\"presentCpuNs\":"<<presentCpuNs<<",\"pacingNs\":"<<pacingNs;
+ out<<",\"viewMode\":"<<viewMode<<",\"cameraCandidateStage\":"<<lastCameraCandidateStage<<",\"presentationFps\":"<<presentationFps<<",\"requestedSyncInterval\":"<<requestedInterval<<",\"presentCpuNs\":"<<presentCpuNs<<",\"pacingNs\":"<<pacingNs;
     out<<",\"drawObserveCpuNs\":"<<drawObserveCpuNs<<",\"bufferObserveCpuNs\":"<<bufferObserveCpuNs<<",\"hudBlendCpuNs\":"<<hudBlendCpuNs<<",\"presentCopyCpuNs\":"<<presentCopyCpuNs<<",\"drawObservations\":"<<drawObservations<<",\"sampleWallMs\":"<<unixMillis()<<",\"movementModified\":false}";out.close();MoveFileExW(temp.c_str(),file.c_str(),MOVEFILE_REPLACE_EXISTING);
 }
 DWORD WINAPI worker(void*) {
@@ -794,10 +804,11 @@ DWORD WINAPI worker(void*) {
 extern "C" __declspec(dllexport) BOOL OWMC_HandDepthTestAttach(IDXGISwapChain* s) {wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);if(std::filesystem::path(exe).filename()!=L"owmc-hand-depth-test.exe") return FALSE;fixture=true;return attach(s);}
 extern "C" __declspec(dllexport) BOOL OWMC_SelectionTestAttach(IDXGISwapChain* s) {wchar_t exe[32768]{};GetModuleFileNameW(nullptr,exe,32768);if(std::filesystem::path(exe).filename()!=L"owmc-hand-depth-test.exe")return FALSE;fixture=true;viewMode=2;return attach(s);}
 extern "C" __declspec(dllexport) void OWMC_HandDepthTestDump() {}
-extern "C" __declspec(dllexport) BOOL OWMC_HandDepthTestVerify() {auto p=std::atomic_load(&latestPose);return finished&&restored&&frames==3&&poses==3&&!failures&&p&&std::abs(p->fov-70)<.01f&&p->flags==2
+extern "C" __declspec(dllexport) BOOL OWMC_HandDepthTestVerify() {auto p=std::atomic_load(&latestPose);return finished&&restored&&frames==(OWMC_LIVE_VERSION>=51?4u:3u)&&poses==3&&!failures&&p&&std::abs(p->fov-70)<.01f&&p->flags==2
 #ifdef OWMC_LIVE_BLEND
     &&ignoredUploadHits>=20&&[](){for(const auto& u:ignoredUploads)if(u.buffer)return false;return true;}()
     &&blended==2&&unmaskedFrames==(viewMode==2?0u:1u)&&heldFrames==1
+    &&originalFramesBeforeComposition==(OWMC_LIVE_VERSION>=51?1u:0u)
 #endif
     ;}
 BOOL WINAPI DllMain(HMODULE m,DWORD reason,LPVOID) {if(reason==DLL_PROCESS_ATTACH) {moduleHandle=m;DisableThreadLibraryCalls(m);HANDLE t=CreateThread(nullptr,0,worker,nullptr,0,nullptr);if(t) CloseHandle(t);}return TRUE;}

@@ -107,7 +107,7 @@ def loading_progress(preflight_ok, timeline):
     checkpoints = (
         'guest_prepare_finished', 'mc_jvm_spawned', 'mc_world_ready',
         'native_spawned', 'native_client_ready', 'native_bootstrap_finished',
-        'native_weapon_graph_ready', 'native_observers_ready', 'loading_windows_arranged',
+        'native_weapon_graph_ready', 'native_observers_checked', 'loading_windows_arranged',
         'loading_presentation_ready',
     )
     total = len(checkpoints) + 1
@@ -139,8 +139,10 @@ def startup_failure_text(detail):
         return 'Windows 拒绝读取或写入整合包。请检查安全软件记录，把完整包解压到本地可写的较短路径后重试。'
     if any(code in lower for code in ('dxgi_error_device', '0x887a0005', '0x887a0006', '0x887a0007')):
         return '显卡停止响应或驱动重置。请正常结束游戏，确认显卡驱动可用后重试。'
-    if 'no completed observation' in lower or 'verifying world-live' in lower:
-        return 'OW 未能及时输出画面。请先用启动器正常结束游戏，再重试。若再次出现，请附本次日志。'
+    if 'verifying world-live' in lower:
+        return 'OW 画面合成器尚未就绪。请用启动器正常结束游戏后重试，若再次出现请附本次日志。'
+    if 'no completed observation' in lower:
+        return '启动阶段尚未完成。请先用启动器正常结束游戏后重试，若再次出现请附本次日志。'
     if any('\u4e00' <= char <= '\u9fff' for char in value):
         return value.splitlines()[0]
     if 'waiting for the real saved minecraft world' in lower:
@@ -148,6 +150,17 @@ def startup_failure_text(detail):
     if 'waiting for' in lower:
         return '当前启动阶段等待超时。请正常结束游戏后重试，并保留本次日志。'
     return '游戏启动未完成。请正常结束游戏后重试。详细原因见本次日志。'
+
+
+def presentation_notice(report, guest):
+    presents = report.get('presentOk')
+    if presents == 0:
+        return 'OW 尚未成功出画。请单击 OW 窗口，若仍无画面，请用启动器正常结束游戏并附本次日志。'
+    if not report.get('lastMcFrame'):
+        if presents and (report.get('sourceFrames') or guest.get('published')):
+            return 'OW 已出画，MC 已发布帧，画面尚未接入。请在 OW 窗口继续，若仍未接入请附本次日志。'
+        return 'MC 画面尚未接入。请确认 MC 已进入世界，若一直未接入请附本次日志。'
+    return '已接入 MC 帧，画面同步尚未确认。请在 OW 窗口继续，若画面停滞请附本次日志。'
 
 
 def matching_timeline(snapshot, request_id):
@@ -209,7 +222,7 @@ class CoverWatchdog:
                     return f'OW 成功 Present 停滞（presentOk={self.signal[1]}）'
             elif now_ns - events['compositor_attach_started'] >= 2*COVER_STALL_NS:
                 return '暂未取得 OW 合成器出画计数'
-            observers = events.get('native_observers_ready')
+            observers = events.get('native_observers_checked', events.get('native_observers_ready'))
             if observers is not None and 'loading_presentation_ready' not in events and now_ns - observers >= COVER_STALL_NS:
                 return '合成帧尚未连通'
         elif 'native_bootstrap_started' in events and 'native_bootstrap_finished' not in events:

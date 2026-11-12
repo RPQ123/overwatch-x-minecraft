@@ -302,7 +302,14 @@ class HandOffFixtures(unittest.TestCase):
             session.await_loading_handoff(14,health(),ticket,status,timeline)
         self.assertEqual(timeline.mark.call_args_list[0].args,('loading_presentation_skipped',))
         self.assertEqual(timeline.mark.call_args_list[0].kwargs['report']['presentOccluded'],5)
+        self.assertIn('OW 尚未成功出画',status['startupPresentationNotice'])
         self.assertNotIn('startupPresentation',status)
+
+    def test_presenting_ow_with_uncomposed_guest_frames_gets_distinct_advice(self):
+        self.assertIn('OW 已出画，MC 已发布帧，画面尚未接入',
+                      cover.presentation_notice({'presentOk':30,'sourceFrames':24,'lastMcFrame':0},{}))
+        self.assertIn('确认 MC 已进入世界',cover.presentation_notice({'presentOk':30},{}))
+        self.assertIn('已接入 MC 帧',cover.presentation_notice({'presentOk':30,'lastMcFrame':5},{}))
 
     def test_collision_and_localized_errors(self):
         sock=Mock()
@@ -315,7 +322,7 @@ class HandOffFixtures(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError,'32133 已被占用'):
                 session.require_bridge_port()
         for text, expected in (
-            ('No completed observation; do not reload. Three-frame stop needs active presents.','OW 未能'),
+            ('No completed observation; do not reload. Three-frame stop needs active presents.','启动阶段尚未完成'),
             ('[WinError 5] Access is denied','本地可写'),
             ('[WinError 126] Missing module','VC++'),
             ('DXGI_ERROR_DEVICE_REMOVED','显卡'),

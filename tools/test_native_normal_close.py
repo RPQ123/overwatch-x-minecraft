@@ -90,8 +90,37 @@ class NormalCloseTests(unittest.TestCase):
         self.assertTrue(self.run_close()['passed']);self.mocks[7].assert_not_called()
     def test_mapped_correction_failure_precedes_restore(self):
         self.primitives.snapshot.side_effect=ValueError('interface differs');self.failed();self.mocks[7].assert_not_called();self.primitives.close_window.assert_not_called()
-    def test_missing_report_not_skipped(self):
-        (self.reports/'body-sync-10.json').unlink();self.failed();self.primitives.close_window.assert_not_called()
+    def test_missing_and_malformed_reports_use_each_mapped_owner_stop_event(self):
+        for index,(prefix,_) in enumerate(close.OWNERS):
+            path=self.reports/f'{prefix}-10.json'
+            if index%2:path.write_text('{"pid":',encoding='utf-8')
+            else:path.unlink()
+        self.assertTrue(self.run_close()['passed'])
+        self.assertEqual([c.kwargs for c in self.mocks[7].call_args_list],[options for _,options in close.OWNERS])
+        self.primitives.close_window.assert_called_once_with(10)
+    def test_inactive_body_proof_is_held_through_normal_close(self):
+        (self.reports/'body-sync-10.json').unlink()
+        def restore(pid,**options):
+            if options.get('body'):raise close.NoStopEvent('No active local passthrough stop event')
+            return self.restore(pid,**options)
+        def window(pid):
+            self.process.kernel.CloseHandle.assert_not_called()
+            return 20
+        self.mocks[7].side_effect=restore
+        self.primitives.close_window.side_effect=window
+        with patch.object(close,'reserve_inactive_body',return_value=43) as reserve:
+            body=self.run_close()['restoration']['body-sync']
+        reserve.assert_called_once_with(self.process,10,{'body-sync':'fixture-path'})
+        self.assertTrue(body['originalCallbacksVerified'])
+        self.process.kernel.CloseHandle.assert_called_once_with(43)
+    def test_missing_stop_event_without_inactive_proof_does_not_close(self):
+        def restore(pid,**options):
+            if options.get('body'):raise close.NoStopEvent('No active local passthrough stop event')
+            return self.restore(pid,**options)
+        self.mocks[7].side_effect=restore
+        with patch.object(close,'reserve_inactive_body',return_value=None):
+            self.failed()
+        self.primitives.close_window.assert_not_called()
     def test_partial_start_skips_only_unmapped_owners(self):
         inventory={p:({p:'fixture-path'} if p=='world-live' else {}) for p,_ in close.OWNERS}
         self.mocks[8].return_value=inventory

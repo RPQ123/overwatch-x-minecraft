@@ -20,7 +20,8 @@ import struct
 import time
 
 from observe_overwatch import ROOT, ResearchProcess, PATCHED_SHA256
-from stop_passthrough import process_creation, read_report, restoration_complete, stop
+from stop_passthrough import (BODY_RECOVERY_PINS, NoStopEvent, original_body_callbacks, process_creation,
+                              read_report, restoration_complete, stop)
 from native_crash_evidence import wait_native_crash_reports
 from provided_plugin_symbols import provided_plugin
 from repair_provided_shutdown_abi import TARGET, CORRECTED, VTABLE, SLOT, ZERO
@@ -161,6 +162,36 @@ def _current_restoration(report, path, identity, prefix):
     if 'creation' in report and report['creation'] != identity['creationFiletime']:
         return False
     return restoration_complete(report, identity['pid'], compositor=prefix == 'world-live')
+
+
+def reserve_inactive_body(process, pid, inventory):
+    """Keep a pinned, never-activated body worker from claiming its flight mapping during close."""
+    pins = {f'owmc-guest-body-v{version}.dll': digest for version, digest in BODY_RECOVERY_PINS.items()}
+    name, value = next(iter(inventory.items()))
+    path = ROOT/'native-host/build'/name
+    if name not in pins or Path(value).resolve() != path.resolve():
+        return None
+    with path.open('rb') as stream:
+        if hashlib.file_digest(stream, 'sha256').hexdigest() != pins[name]:
+            return None
+    # Both pinned workers claim this mapping before owning a callback and keep
+    # its handle until game exit. ERROR_ALREADY_EXISTS refuses activation.
+    kernel = process.kernel
+    kernel.CreateFileMappingW.argtypes = [wintypes.HANDLE, ctypes.c_void_p, wintypes.DWORD,
+                                          wintypes.DWORD, wintypes.DWORD, wintypes.LPCWSTR]
+    kernel.CreateFileMappingW.restype = wintypes.HANDLE
+    ctypes.set_last_error(0)
+    handle = kernel.CreateFileMappingW(ctypes.c_void_p(-1), None, 4, 0, 256, f'Local\\OWMCNativeFlight_{pid}')
+    if not handle:
+        return None
+    try:
+        if ctypes.get_last_error() != 183 and original_body_callbacks(process):
+            reserved, handle = handle, None
+            return reserved
+    finally:
+        if handle:
+            kernel.CloseHandle(handle)
+    return None
 
 
 def inspect_shutdown_system(process, *, observed=None):
@@ -358,7 +389,7 @@ def normal_close(identity, folder):
     out = {**identity, 'passed': False, 'normalClosePassed': False,
            'requestedNormalClose': True, 'forcedTermination': False,
            'restoration': {}, 'verifierSha256': VERIFIER_SHA256}
-    process = waiter = None
+    process = waiter = inactive_body = None
     failure = None
 
     def save():
@@ -391,10 +422,25 @@ def normal_close(identity, folder):
                     continue
                 path = ROOT / f"native-host/build/{prefix}-{identity['pid']}.json"
                 # A missing/stale report cannot stand in for a restored owner.
-                value = read_report(path)
-                if not _current_restoration(value, path, identity, prefix):
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        value = stop(identity['pid'], **options)
+                try:
+                    value = read_report(path)
+                    restored = _current_restoration(value, path, identity, prefix)
+                except (OSError, ValueError):
+                    restored = False
+                if not restored:
+                    try:
+                        with contextlib.redirect_stdout(io.StringIO()):
+                            value = stop(identity['pid'], **options)
+                    except NoStopEvent:
+                        if prefix != 'body-sync':
+                            raise
+                        inactive_body = reserve_inactive_body(process, identity['pid'], inventory[prefix])
+                        if not inactive_body:
+                            raise
+                        out['restoration'][prefix] = {'originalCallbacksVerified': True,
+                                                     'flightMappingReservedUntilExit': True}
+                        save()
+                        continue
                 if not _current_restoration(value, path, identity, prefix):
                     raise RuntimeError('Incomplete adapter restoration: ' + prefix)
                 out['restoration'][prefix] = value
@@ -438,6 +484,8 @@ def normal_close(identity, folder):
             failure = caught
             out['error'] = repr(caught)
     finally:
+        if inactive_body:
+            process.kernel.CloseHandle(inactive_body)
         if process is not None:
             process.close()
         if waiter is not None:

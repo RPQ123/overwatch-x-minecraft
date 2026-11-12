@@ -2,13 +2,13 @@
 import time as _startup_time
 _PYTHON_ENTERED_NS=_startup_time.perf_counter_ns()
 from modpack.config import paths
-import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,urllib.request
+import argparse,ctypes,hashlib,json,os,socket,subprocess,sys,time,urllib.error,urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import psutil
 from launch_passthrough_guest import prepare,PROFILE
 from observe_overwatch import ROOT,ResearchProcess
-from attach_hand_depth_probe import attach
+from attach_hand_depth_probe import attach, NativeLoaderPending
 from fill_native_health import fill
 from prepare_survival_health import prepare as prepare_health
 from hide_native_hero_prompt import hide
@@ -60,8 +60,8 @@ from native_binding_scope import GuestBindingScope,current_body
 from native_crash_evidence import wait_native_crash_reports
 from minecraft_crash_evidence import snapshot as minecraft_snapshot,detect as minecraft_crashes,MinecraftCrashError
 from minecraft_save_evidence import capture as capture_save_evidence,inspect as inspect_save_evidence
-from startup_timeline import StartupTimeline,GuestStartupLog
-from startup_cover import CompositionGate, FRAME_MAX_AGE_MS, LOAD_SECONDS, LoadingTicket
+from startup_timeline import StartupTimeline, GuestStartupLog, compositor_summary, guest_summary
+from startup_cover import CompositionGate, FRAME_MAX_AGE_MS, LOAD_SECONDS, LoadingTicket, presentation_notice
 
 EXE=paths().get('owExecutable')
 BUILD=ROOT/'native-host/build'
@@ -69,6 +69,7 @@ STATUS=ROOT/'research/session-status.json'
 MODULES={'world-live':COMPOSITOR_VERSION,'body-sync':BODY_VERSION,'weapon-gate':GATE_VERSION,'native-emissions':EMISSION_VERSION}
 NATIVE_FILES={'world-live':COMPOSITOR_DLL,'body-sync':BODY_DLL,'weapon-gate':GATE_DLL,'native-emissions':EMISSION_DLL}
 MODES={'world-live':'live_passthrough','body-sync':'body_sync','weapon-gate':'weapon_gate','native-emissions':'emissions'}
+OBSERVERS=('body-sync','weapon-gate','native-emissions')
 STARTUP_TIMELINE=None
 WINDOW_REVEALS=set()
 
@@ -218,7 +219,7 @@ def stage_ready(pid,prefix,created_ns):
     path=BUILD/f'{prefix}-{pid}.json'
     try:state=json.loads(path.read_text());modified=path.stat().st_mtime_ns
     except (OSError,ValueError):return False
-    return state.get('pid')==pid and state.get('probeVersion')==MODULES[prefix] and state.get('enabled') is True and not state.get('failures') and modified>=created_ns and time.time_ns()-modified<4_000_000_000
+    return isinstance(state,dict) and state.get('pid')==pid and state.get('probeVersion')==MODULES[prefix] and state.get('enabled') is True and not state.get('failures') and modified>=created_ns and time.time_ns()-modified<4_000_000_000
 
 def ensure_bootstrap(pid,map_id=MAPS['hollywood']):
     if map_id not in MAPS.values():raise ValueError('Unverified native bootstrap map')
@@ -232,18 +233,56 @@ def ensure_bootstrap(pid,map_id=MAPS['hollywood']):
     if (path.stat().st_mtime_ns<int(psutil.Process(pid).create_time()*1e9) or prior.get('pid')!=pid
         or prior.get('probeVersion')!=BOOTSTRAP_VERSION or prior.get('mapId')!=map_id or prior.get('phase')!=3 or not prior.get('restored') or prior.get('failures')):
         raise RuntimeError('Current native startup is pending/failed; preserve the process for diagnosis')
-def connect_stages(pid,prefixes=None,*,loading=None):
+def connect_stages(pid,prefixes=None,*,loading=None,observer_attempts=None):
     created_ns=int(psutil.Process(pid).create_time()*1e9)
     options={'loading':loading} if loading else {}
     for prefix,name in NATIVE_FILES.items():
         if prefixes is not None and prefix not in prefixes:continue
         if loading:loading.checkpoint()
+        optional=observer_attempts is not None and prefix in OBSERVERS
         installed=installed_modules(pid)
         family=name.rsplit('-v',1)[0]+'-v'
         others=[n for n in installed if n.startswith(family) and n!=name]
         if others:raise RuntimeError('An earlier native build remains loaded: '+', '.join(others)+'. Restart this offline client before changing native builds.')
         if name in installed:
-            if installed[name]!=(BUILD/name).resolve() or not stage_ready(pid,prefix,created_ns):raise RuntimeError('Loaded native stage is unhealthy; do not reload its hooks: '+prefix)
+            if installed[name]!=(BUILD/name).resolve():
+                raise RuntimeError('Loaded native stage is unhealthy; do not reload its hooks: '+prefix)
+            if not stage_ready(pid,prefix,created_ns):
+                if optional:return prefix  # The mapped owner can still publish its first report.
+                raise RuntimeError('Loaded native stage is unhealthy; do not reload its hooks: '+prefix)
+        elif optional:
+            if prefix in observer_attempts:return prefix
+            prerequisites=('world-live', *OBSERVERS[:OBSERVERS.index(prefix)])
+            if not all(stage_ready(pid,key,created_ns) for key in prerequisites):return prefix
+            try:
+                attach(pid,**{MODES[prefix]:True},wait_for_report=False)
+            except NativeLoaderPending:
+                observer_attempts.add(prefix)
+                return prefix  # Never race a remote load by requesting another owner.
+            except (json.JSONDecodeError, urllib.error.URLError, TimeoutError):
+                return prefix
+            except FileNotFoundError as failure:
+                if failure.filename is None or Path(failure.filename).name not in {
+                    f'{key}-{pid}.json' for key in prerequisites
+                }:raise
+                return prefix
+            except ValueError as failure:
+                if str(failure) not in (
+                    'Unexpected native hero flags/Volley nodes',
+                    'No calibrated initial weapon gate profile for this hero',
+                    'No calibrated weapon for current hero',
+                    'No original native WeaponVolley graph on the local model',
+                    'No actual current acknowledged guest world',
+                    'Native hero changed while binding emissions',
+                    'Local world/controller changed during read',
+                ):
+                    raise
+                return prefix  # Read-only preflight can run again when the hero or world settles.
+            observer_attempts.add(prefix)
+            try:
+                wait('Verifying optional owner '+prefix,lambda:stage_ready(pid,prefix,created_ns),.65,**options)
+            except TimeoutError:
+                return prefix
         else:
             # The original weapon graph briefly exposes transitional nodes and
             # flags during hero entry. This exact preflight error is read-only
@@ -386,10 +425,11 @@ class GuestRecovery:
         record['guestRecovery']={'restarts':self.retries,'sourcePid':guest['sourcePid']}
         return True
 
-def wait_for_selection(pid,settings,recovery,record):
+def wait_for_selection(pid,settings,recovery,record,*,advance_observers=None):
     native_identity=psutil.Process(pid)
     cursor=PickerCursorRepair(pid,MODULES['world-live'])
     while native_identity.is_running():
+        if advance_observers:advance_observers()
         try:cursor.poll();record['pickerCursorReleases']=cursor.released
         except OSError:pass
         if not recovery.alive():
@@ -451,7 +491,7 @@ def launch_guest(visible,timeline=None,*,display_settings=None,loading=None,isol
         return guest
     guest=wait('Waiting for the real saved Minecraft world',ready,240 if loading else 90,interval=.1,loading=loading)
     startup_log.poll()
-    if timeline:timeline.mark('mc_world_ready',pid=guest['sourcePid'],published=guest['published'])
+    if timeline:timeline.mark('mc_world_ready',pid=guest['sourcePid'],published=guest['published'],guest=guest_summary(guest))
     return guest
 
 def arrange_visible_windows(pid,guest,settings,*,reveal=True):
@@ -691,6 +731,7 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
     last_receipt = None
     fallback = False
     last_report = {}
+    last_guest = guest_summary(guest)
     presentation_deadline = time.monotonic() + 15
 
     def receipt(ow, mc, evidence):
@@ -705,7 +746,7 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
         write_status(record)
 
     def advance():
-        nonlocal last_receipt,fallback,last_report
+        nonlocal last_receipt,fallback,last_report,last_guest
         if loading.state() == 'released':
             if last_receipt is None and not fallback:
                 raise RuntimeError('当前请求没有合成回执。')
@@ -721,9 +762,11 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
             except (OSError, ValueError, psutil.Error):
                 last_receipt=None  # Leave unverified windows untouched.
             fallback=True
+            notice=presentation_notice(last_report,last_guest)
+            record['startupPresentationNotice']=notice
             publish(last_receipt)
-            timeline.mark('loading_presentation_skipped',report=last_report)
-            print('游戏已在后台启动，合成帧尚未验证，已继续交接。',flush=True)
+            timeline.mark('loading_presentation_skipped',report=last_report,guest=last_guest,notice=notice)
+            print(notice,flush=True)
             return None
         try:
             ow,mc=pair()
@@ -732,8 +775,8 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
         except (OSError, ValueError, psutil.Error):
             gate.previous=None
             return None
-        last_report={key:report.get(key) for key in ('frames','poses','presentOk','presentOccluded','presentTests',
-                                                    'lastPresentHresult','blended','viewMode')}
+        last_report=compositor_summary(report)
+        last_guest=guest_summary(sample)
         now = round(time.time() * 1000)
         evidence = gate.observe(sample, report, pid, minecraft.pid, now)
         if (report.get('probeVersion') != COMPOSITOR_VERSION
@@ -744,7 +787,7 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
             gate.previous = None
         if evidence:
             last_receipt=receipt(ow,mc,dict(evidence,frameVerified=True))
-            timeline.mark('loading_presentation_ready',report=last_report)
+            timeline.mark('loading_presentation_ready',report=last_report,guest=last_guest)
             publish(last_receipt)
         elif last_receipt and (now-last_receipt['observedMs'] > FRAME_MAX_AGE_MS or gate.previous is None):
             last_receipt = None
@@ -758,7 +801,7 @@ def await_loading_handoff(pid, guest, loading, record, timeline):
     timeline.mark('loading_handoff')
 
 
-def initialize_session(settings,timeline,loading,*,isolation=None):
+def initialize_session(settings,timeline,loading,*,isolation=None,observer_attempts=None):
     from configure_passthrough import validate_flight_key
     # Validate before any files, guest launch or native attachment. F7..F11
     # already own portals/mobs/charge and cannot double as flight.
@@ -807,16 +850,19 @@ def initialize_session(settings,timeline,loading,*,isolation=None):
     stage_options={'loading':loading} if loading else {}
     connect_stages(pid,{'world-live'},**stage_options)
     if timeline:
-        presentation=read_report(BUILD/f'world-live-{pid}.json')
-        timeline.mark('compositor_ready',report={key:presentation.get(key) for key in (
-            'pid','probeVersion','enabled','failures','blended','lastMcFrame','lastMcGeneration','frames','poses','viewMode',
-            'presentOk','presentOccluded','presentTests','lastPresentHresult')})
+        try:presentation=read_report(BUILD/f'world-live-{pid}.json')
+        except (OSError,ValueError):presentation={}
+        timeline.mark('compositor_ready',report=compositor_summary(presentation),guest=guest_summary(guest))
     # The bootstrap's original Genji is initialized behind the animated picker.
     # Install the shared native weapon observers there, before the user can
     # confirm an uncalibrated initial hero. Body coupling still waits for the
     # actual gameplay selection, preserving the original picker animation.
-    connect_stages(pid,{'body-sync','weapon-gate','native-emissions'},**stage_options)
-    if timeline:timeline.mark('native_observers_ready')
+    pending=connect_stages(pid,OBSERVERS,observer_attempts=observer_attempts,**stage_options)
+    if pending:
+        print(f'原生同步 {pending} 尚在初始化，继续交接游戏窗口。',flush=True)
+    if timeline:
+        timeline.mark('native_observers_checked')
+        timeline.mark('native_observers_pending' if pending else 'native_observers_ready',waitingFor=pending)
     if not loading:arrange_visible_windows(pid,guest,settings)
     if settings.get('hideHeroPrompt'):
         try:
@@ -827,27 +873,40 @@ def initialize_session(settings,timeline,loading,*,isolation=None):
             print(f'原版英雄提示保持原样：{failure}',flush=True)
     record={'ready':False,'phase':'hero-selection','nativePid':pid,'startedMs':round(time.time()*1000),
             'settings':settings,'loadedFiles':manifest,'state':None,'heroHealth':None,
-            'nativeDisplayMode':display_mode}
+            'nativeDisplayMode':display_mode,'nativeObserversPending':pending}
     if loading:await_loading_handoff(pid,guest,loading,record,timeline)
     return record,guest,pid,files
 
 
 def run(settings,timeline=None,*,loading=None):
+    observer_attempts=set()
     if loading:
         from startup_isolation import StartupIsolation
         loading.checkpoint()
         with StartupIsolation(paths(), loading) as isolation:
-            record,guest,pid,files=initialize_session(settings,timeline,loading,isolation=isolation)
+            record,guest,pid,files=initialize_session(settings,timeline,loading,isolation=isolation,observer_attempts=observer_attempts)
         timeline.mark('loading_isolation_restored',pendingRecovery=isolation.pending)
     else:
-        record,guest,pid,files=initialize_session(settings,timeline,loading)
+        record,guest,pid,files=initialize_session(settings,timeline,loading,observer_attempts=observer_attempts)
     print('Original animated hero selection over Minecraft; confirm a supported hero to enter gameplay.',flush=True)
     if timeline:timeline.finish('hero-selection',pid=pid)
     recovery=GuestRecovery(guest)
-    wait_for_selection(pid,settings,recovery,record)
+    next_observers=0
+
+    def advance_observers():
+        nonlocal next_observers
+        previous=record['nativeObserversPending']
+        if not previous or time.monotonic()<next_observers:return
+        next_observers=time.monotonic()+.5
+        pending=connect_stages(pid,OBSERVERS,observer_attempts=observer_attempts)
+        record['nativeObserversPending']=pending
+        if pending!=previous:
+            print(f'原生同步等待 {pending}。' if pending else '原生同步组件已就绪。',flush=True)
+            if timeline and not pending:timeline.mark('native_observers_ready')
+
+    wait_for_selection(pid,settings,recovery,record,advance_observers=advance_observers)
     settings=record['settings']
     arrange_visible_windows(pid,recovery.guest,settings)
-    connect_stages(pid)
     try:
         quality_process=ResearchProcess(pid)
         try:quality=apply_render_profile(quality_process,pid,settings.get('nativeRenderProfile','medium'))
@@ -872,6 +931,7 @@ def run(settings,timeline=None,*,loading=None):
     cursor=PickerCursorRepair(pid,MODULES['world-live'])
     while native_identity.is_running():
         try:
+            advance_observers()
             try:cursor.poll();record['pickerCursorReleases']=cursor.released
             except OSError:pass
             if not recovery.alive():raise ValueError('Minecraft process stopped')
@@ -898,12 +958,18 @@ def run(settings,timeline=None,*,loading=None):
             record['warnings']=bindings.warnings
             record['hero']={'id':body['hero'],'modelId':body['modelId'],'worldId':body.get('worldId',1),
                             'worldStable':body.get('worldStable',True)}
-            state=health(pid,body);repair_requested=False;record.update(ready=bool(state),phase='gameplay',state=state,heartbeatMs=round(time.time()*1000));record.pop('error',None);write_status(record)
+            state=health(pid,body);repair_requested=False;record.update(ready=bool(state),phase='gameplay',state=state,heartbeatMs=round(time.time()*1000));record.pop('error',None)
+            if state:record.pop('startupPresentationNotice',None)
+            write_status(record)
         except (OSError,ValueError,KeyError,StopIteration) as failure:
             repair_requested='light scope' not in str(failure)
             if 'Original hero selection has not entered first person' in str(failure):
                 record.update(ready=False,phase='hero-selection',heartbeatMs=round(time.time()*1000));record.pop('error',None)
-            else:record.update(ready=False,error=str(failure),heartbeatMs=round(time.time()*1000))
+            else:
+                notice=record.get('startupPresentationNotice') or str(failure)
+                if record.get('nativeObserversPending') and notice==str(failure):
+                    notice='OW 已运行，MC 身体或武器同步仍在初始化。请保留本次启动日志。'
+                record.update(ready=False,error=notice,heartbeatMs=round(time.time()*1000))
             write_status(record)
             if not recovery.alive():recovery.recover(record)
         time.sleep(.05)

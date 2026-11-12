@@ -247,6 +247,44 @@ class RecoveryTests(unittest.TestCase):
     def test_same_named_dll_from_unrelated_folder_is_rejected(self):
         with self.assertRaisesRegex(RuntimeError,'unhealthy'):self.exercise({session.COMPOSITOR_DLL:session.ROOT/'other'/session.COMPOSITOR_DLL})
 
+    def test_mapped_optional_observer_without_report_does_not_block_or_reload(self):
+        loaded={session.COMPOSITOR_DLL:(session.BUILD/session.COMPOSITOR_DLL).resolve()}
+        ready={'world-live'}
+        attempted=set()
+        native=Mock(create_time=Mock(return_value=123))
+        def attach(pid,**mode):
+            self.assertIs(mode['wait_for_report'],False)
+            prefix=next(k for k,v in session.MODES.items() if mode.get(v))
+            name=session.NATIVE_FILES[prefix]
+            loaded[name]=(session.BUILD/name).resolve()
+            if prefix!='body-sync':ready.add(prefix)
+        def wait(label,condition,seconds):
+            self.assertLess(seconds,1)
+            if not condition():raise TimeoutError(label)
+        with patch.object(session.psutil,'Process',return_value=native), \
+             patch.object(session,'installed_modules',side_effect=lambda pid:dict(loaded)), \
+             patch.object(session,'stage_ready',side_effect=lambda pid,prefix,created:prefix in ready), \
+             patch.object(session,'wait',side_effect=wait),patch.object(session,'attach',side_effect=attach) as launch:
+            self.assertEqual(session.connect_stages(42,session.OBSERVERS,observer_attempts=attempted),'body-sync')
+            self.assertEqual(session.connect_stages(42,session.OBSERVERS,observer_attempts=attempted),'body-sync')
+            launch.assert_called_once_with(42,body_sync=True,wait_for_report=False)
+            ready.add('body-sync')
+            self.assertIsNone(session.connect_stages(42,session.OBSERVERS,observer_attempts=attempted))
+            self.assertEqual(launch.call_count,3)
+
+    def test_pending_loader_is_never_repeated_even_before_dll_is_mapped(self):
+        loaded={session.COMPOSITOR_DLL:(session.BUILD/session.COMPOSITOR_DLL).resolve()}
+        attempted=set()
+        with patch.object(session.psutil,'Process',return_value=Mock(create_time=Mock(return_value=123))), \
+             patch.object(session,'installed_modules',return_value=loaded),patch.object(session,'stage_ready',return_value=True), \
+             patch.object(session,'attach',side_effect=session.NativeLoaderPending()) as launch:
+            for _ in range(2):
+                self.assertEqual(session.connect_stages(42,session.OBSERVERS,observer_attempts=attempted),'body-sync')
+            launch.assert_called_once_with(42,body_sync=True,wait_for_report=False)
+            loaded[session.BODY_DLL]=session.ROOT/'other'/session.BODY_DLL
+            with self.assertRaisesRegex(RuntimeError,'do not reload'):
+                session.connect_stages(42,session.OBSERVERS,observer_attempts=attempted)
+
 class GuestRecoveryTests(unittest.TestCase):
     def setUp(self):
         cursor_patch=patch.object(session,'PickerCursorRepair')
